@@ -733,8 +733,8 @@ function refreshShopAfford() {
 }
 
 function openUpgradePanel(t) {
+  setPlacing(null); // must come first — it clears state.selected
   state.selected = t;
-  setPlacing(null);
   const ty = TOWER_TYPES[t.type];
   const st = towerStats(t);
   $('upName').textContent = ty.icon + ' ' + ty.name + ' — LVL ' + t.level;
@@ -814,6 +814,10 @@ cv.addEventListener('click', (ev) => {
   if (!c) { setPlacing(null); closeUpgradePanel(); return; }
   const key = c.col + ',' + c.row;
 
+  // Clicking a built tower always opens its upgrade panel, even while a
+  // shop card is still armed — otherwise you can't upgrade after placing.
+  if (grid[key]) { openUpgradePanel(grid[key]); return; }
+
   if (state.placing != null) {
     const ty = TOWER_TYPES[state.placing];
     if (!canBuildAt(c.col, c.row) || state.money < ty.cost) { Sound.invalid(); return; }
@@ -834,7 +838,6 @@ cv.addEventListener('click', (ev) => {
     return;
   }
 
-  if (grid[key]) { openUpgradePanel(grid[key]); return; }
   closeUpgradePanel();
 });
 
@@ -1019,6 +1022,11 @@ refreshTrackButtons();
 function update(dt) {
   if (state.mode !== 'playing') return;
   state.flash = Math.max(0, state.flash - dt * 1.5);
+
+  // Refresh the HUD a few times a second so credits tick up live during a
+  // wave and the upgrade button's affordability stays current.
+  state.hudTimer = (state.hudTimer || 0) - dt;
+  if (state.hudTimer <= 0) { state.hudTimer = 0.25; updateHUD(); }
 
   if (state.phase === 'build' && state.auto && state.autoTimer > 0) {
     state.autoTimer -= dt;
