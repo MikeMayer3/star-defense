@@ -51,8 +51,8 @@ function py(cy) { return boardY + cy * cell; }
    ====================================================================== */
 const Sound = (() => {
   let actx = null;
-  let enabled = true;
-  let musicEnabled = true;
+  let enabled = localStorage.getItem('stardefense_sfx') !== '0';
+  let musicEnabled = localStorage.getItem('stardefense_music') !== '0';
   let musicHandle = null;
   function ctxReady() {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -76,33 +76,74 @@ const Sound = (() => {
     } catch (e) { /* ignore */ }
   }
 
-  // Background music: looping synth bars scheduled with absolute
-  // AudioContext timestamps so they stay sample-accurate.
+  // Background music: looping synth patterns scheduled with absolute
+  // AudioContext timestamps so they stay sample-accurate. Each track is a
+  // 4-bar chord progression (Am–F–C–G family), 32 steps per loop, so it
+  // takes far longer to repeat than a single bar.
   const MUSIC_TRACKS = {
     drift: {
       name: 'Drift', bpm: 96,
-      bass: [110.00, 0, 87.31, 0, 110.00, 0, 98.00, 0],
-      arp: [220.00, 261.63, 329.63, 261.63, 196.00, 246.94, 293.66, 261.63],
+      bass: [
+        110.00, 0, 0, 110.00, 0, 0, 164.81, 0,       // Am
+        87.31, 0, 0, 87.31, 0, 0, 130.81, 0,          // F
+        130.81, 0, 0, 130.81, 0, 0, 196.00, 0,        // C
+        98.00, 0, 0, 98.00, 0, 0, 146.83, 0,          // G
+      ],
+      arp: [
+        220.00, 261.63, 329.63, 440.00, 523.25, 440.00, 329.63, 261.63,
+        174.61, 220.00, 261.63, 349.23, 440.00, 349.23, 261.63, 220.00,
+        261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 196.00,
+        196.00, 246.94, 293.66, 392.00, 493.88, 392.00, 293.66, 246.94,
+      ],
       hat: null,
       bassType: 'triangle', arpType: 'sine',
     },
     pulse: {
       name: 'Pulse', bpm: 130,
-      bass: [130.81, 130.81, 130.81, 130.81, 164.81, 164.81, 146.83, 146.83],
-      arp: [523.25, 493.88, 440.00, 493.88, 523.25, 587.33, 659.25, 587.33],
-      hat: [1, 0, 1, 0, 1, 0, 1, 0],
+      bass: [
+        110.00, 110.00, 220.00, 110.00, 110.00, 220.00, 110.00, 164.81,   // Am
+        87.31, 87.31, 174.61, 87.31, 87.31, 174.61, 87.31, 130.81,        // F
+        130.81, 130.81, 261.63, 130.81, 130.81, 261.63, 130.81, 196.00,   // C
+        98.00, 98.00, 196.00, 98.00, 98.00, 196.00, 98.00, 146.83,        // G
+      ],
+      arp: [
+        440.00, 0, 523.25, 440.00, 659.25, 523.25, 440.00, 329.63,
+        349.23, 0, 440.00, 349.23, 523.25, 440.00, 349.23, 261.63,
+        523.25, 0, 659.25, 523.25, 783.99, 659.25, 523.25, 392.00,
+        392.00, 0, 493.88, 392.00, 587.33, 493.88, 392.00, 293.66,
+      ],
+      hat: [
+        1, 0, 1, 1, 1, 0, 1, 0,
+        1, 0, 1, 1, 1, 0, 1, 0,
+        1, 0, 1, 1, 1, 0, 1, 0,
+        1, 1, 1, 0, 1, 1, 1, 1,
+      ],
       bassType: 'sawtooth', arpType: 'square',
     },
     nova: {
       name: 'Nova', bpm: 138,
-      bass: [174.61, 0, 174.61, 220.00, 196.00, 0, 196.00, 164.81],
-      arp: [349.23, 415.30, 440.00, 415.30, 392.00, 466.16, 523.25, 466.16],
-      hat: [1, 1, 0, 1, 1, 1, 0, 1],
+      bass: [
+        87.31, 0, 87.31, 87.31, 0, 87.31, 0, 130.81,     // F
+        98.00, 0, 98.00, 98.00, 0, 98.00, 0, 146.83,     // G
+        110.00, 0, 110.00, 110.00, 0, 110.00, 0, 164.81, // Am
+        130.81, 0, 130.81, 130.81, 0, 130.81, 0, 196.00, // C
+      ],
+      arp: [
+        349.23, 440.00, 523.25, 440.00, 349.23, 523.25, 698.46, 523.25,
+        392.00, 493.88, 587.33, 493.88, 392.00, 587.33, 783.99, 587.33,
+        440.00, 523.25, 659.25, 523.25, 440.00, 659.25, 880.00, 659.25,
+        523.25, 659.25, 783.99, 659.25, 523.25, 783.99, 659.25, 587.33,
+      ],
+      hat: [
+        1, 1, 0, 1, 1, 1, 0, 1,
+        1, 1, 0, 1, 1, 1, 0, 1,
+        1, 1, 0, 1, 1, 1, 0, 1,
+        1, 1, 1, 1, 1, 1, 1, 1,
+      ],
       bassType: 'square', arpType: 'sawtooth',
     },
   };
   const MUSIC_TRACK_KEY = 'stardefense_musicTrack';
-  const BAR_BEATS = 8;
   let currentTrackId = MUSIC_TRACKS[localStorage.getItem(MUSIC_TRACK_KEY)] ? localStorage.getItem(MUSIC_TRACK_KEY) : 'drift';
 
   function musicNote(freq, time, dur, type, vol) {
@@ -137,13 +178,14 @@ const Sound = (() => {
   function scheduleMusicBar(startTime) {
     const track = MUSIC_TRACKS[currentTrackId];
     const beat = 60 / track.bpm;
-    for (let i = 0; i < BAR_BEATS; i++) {
+    const steps = track.bass.length;
+    for (let i = 0; i < steps; i++) {
       const t = startTime + i * beat;
       if (track.bass[i]) musicNote(track.bass[i], t, beat * 0.9, track.bassType, 0.05);
       if (track.arp[i]) musicNote(track.arp[i], t, beat * 0.5, track.arpType, 0.032);
       if (track.hat && track.hat[i]) musicHat(t, 0.02);
     }
-    return beat * BAR_BEATS;
+    return beat * steps;
   }
   function startMusic() {
     if (!musicEnabled || musicHandle) return;
@@ -184,10 +226,14 @@ const Sound = (() => {
     boss: () => tone(180, 0.5, 'sawtooth', 0.15, 50),
     gameOver: () => { tone(300, 0.3, 'sine', 0.14, -150); setTimeout(() => tone(150, 0.5, 'sine', 0.14, -100), 250); },
     victory: () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'sine', 0.14), i * 150)); },
-    setEnabled(v) { enabled = v; },
+    setEnabled(v) { enabled = v; try { localStorage.setItem('stardefense_sfx', v ? '1' : '0'); } catch (e) { /* ignore */ } },
     isEnabled: () => enabled,
     startMusic, stopMusic,
-    setMusicEnabled(v) { musicEnabled = v; if (!v) stopMusic(); else startMusic(); },
+    setMusicEnabled(v) {
+      musicEnabled = v;
+      try { localStorage.setItem('stardefense_music', v ? '1' : '0'); } catch (e) { /* ignore */ }
+      if (!v) stopMusic(); else startMusic();
+    },
     isMusicEnabled: () => musicEnabled,
     setTrack,
     getTrack: () => currentTrackId,
@@ -995,14 +1041,23 @@ $('autoBtn').addEventListener('click', () => {
   $('autoBtn').classList.toggle('on', state.auto);
 });
 
-$('muteBtn').addEventListener('click', () => {
-  Sound.setEnabled(!Sound.isEnabled());
-  $('muteBtn').textContent = Sound.isEnabled() ? '🔊 Sound On' : '🔇 Sound Off';
-});
-$('musicBtn').addEventListener('click', () => {
-  Sound.setMusicEnabled(!Sound.isMusicEnabled());
-  $('musicBtn').textContent = Sound.isMusicEnabled() ? '🎵 Music On' : '🎵 Music Off';
-});
+// Sound/music toggles exist in two places (menu + in-game HUD); keep all
+// four buttons showing the same state.
+function refreshAudioButtons() {
+  const s = Sound.isEnabled(), m = Sound.isMusicEnabled();
+  $('muteBtn').textContent = s ? '🔊 Sound On' : '🔇 Sound Off';
+  $('musicBtn').textContent = m ? '🎵 Music On' : '🎵 Music Off';
+  $('sfxBtnGame').textContent = s ? '🔊' : '🔇';
+  $('sfxBtnGame').classList.toggle('off', !s);
+  $('musicBtnGame').classList.toggle('off', !m);
+}
+function toggleSfx() { Sound.setEnabled(!Sound.isEnabled()); refreshAudioButtons(); }
+function toggleMusic() { Sound.setMusicEnabled(!Sound.isMusicEnabled()); refreshAudioButtons(); }
+$('muteBtn').addEventListener('click', toggleSfx);
+$('musicBtn').addEventListener('click', toggleMusic);
+$('sfxBtnGame').addEventListener('click', toggleSfx);
+$('musicBtnGame').addEventListener('click', toggleMusic);
+refreshAudioButtons();
 
 const trackSelectEl = $('trackSelect');
 function refreshTrackButtons() {

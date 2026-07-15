@@ -284,6 +284,7 @@ canvas {
   color: var(--neon-green);
   box-shadow: 0 0 12px rgba(93, 255, 176, 0.4);
 }
+.hud-btn.off { opacity: 0.4; }
 
 /* ============ SHOP BAR ============ */
 #shop {
