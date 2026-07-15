@@ -54,6 +54,7 @@ const Sound = (() => {
   let enabled = localStorage.getItem('stardefense_sfx') !== '0';
   let musicEnabled = localStorage.getItem('stardefense_music') !== '0';
   let musicHandle = null;
+  let musicBus = null; // master gain for music — lets mute cut ALL scheduled notes instantly
   function ctxReady() {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
     if (actx.state === 'suspended') actx.resume();
@@ -147,6 +148,7 @@ const Sound = (() => {
   let currentTrackId = MUSIC_TRACKS[localStorage.getItem(MUSIC_TRACK_KEY)] ? localStorage.getItem(MUSIC_TRACK_KEY) : 'drift';
 
   function musicNote(freq, time, dur, type, vol) {
+    if (!musicBus) return;
     try {
       const ac = ctxReady();
       const osc = ac.createOscillator();
@@ -156,12 +158,13 @@ const Sound = (() => {
       gain.gain.setValueAtTime(0, time);
       gain.gain.linearRampToValueAtTime(vol, time + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
-      osc.connect(gain).connect(ac.destination);
+      osc.connect(gain).connect(musicBus);
       osc.start(time);
       osc.stop(time + dur + 0.05);
     } catch (e) { /* ignore */ }
   }
   function musicHat(time, vol) {
+    if (!musicBus) return;
     try {
       const ac = ctxReady();
       const osc = ac.createOscillator();
@@ -170,7 +173,7 @@ const Sound = (() => {
       osc.frequency.value = 5200;
       gain.gain.setValueAtTime(vol, time);
       gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
-      osc.connect(gain).connect(ac.destination);
+      osc.connect(gain).connect(musicBus);
       osc.start(time);
       osc.stop(time + 0.05);
     } catch (e) { /* ignore */ }
@@ -190,7 +193,10 @@ const Sound = (() => {
   function startMusic() {
     if (!musicEnabled || musicHandle) return;
     const ac = ctxReady();
-    let nextBarTime = ac.currentTime + 0.1;
+    musicBus = ac.createGain();
+    musicBus.gain.value = 1;
+    musicBus.connect(ac.destination);
+    let nextBarTime = ac.currentTime + 0.1; // always restarts from the top of the loop
     const tick = () => {
       const barDur = scheduleMusicBar(nextBarTime);
       nextBarTime += barDur;
@@ -200,6 +206,16 @@ const Sound = (() => {
   }
   function stopMusic() {
     if (musicHandle) { clearTimeout(musicHandle); musicHandle = null; }
+    // Cut everything already scheduled: fast-fade the music bus (avoids a
+    // click), then disconnect it. Orphaned oscillators die off silently.
+    if (musicBus && actx) {
+      const bus = musicBus;
+      musicBus = null;
+      try {
+        bus.gain.setTargetAtTime(0, actx.currentTime, 0.015);
+        setTimeout(() => { try { bus.disconnect(); } catch (e) { /* ignore */ } }, 200);
+      } catch (e) { /* ignore */ }
+    }
   }
   function setTrack(id) {
     if (!MUSIC_TRACKS[id] || id === currentTrackId) return;
