@@ -41,7 +41,7 @@ function resize() {
   boardX = (W - cell * COLS) / 2;
   boardY = topH + (H - topH - shopH - cell * ROWS) / 2;
 }
-window.addEventListener('resize', () => { resize(); initStars(); });
+window.addEventListener('resize', () => { resize(); initStars(); updateWavePreview(); });
 
 function px(cx) { return boardX + cx * cell; }
 function py(cy) { return boardY + cy * cell; }
@@ -407,14 +407,35 @@ function towerStats(t) {
 
 /* ======================================================================
    ENEMY TYPES
+   Each type is designed to counter a specific tower habit:
+   · shieldHits — Warden's shield blocks the first N hits outright, so
+     rapid fire strips it and single big shots are wasted on it.
+   · armor — Aegis deflects a flat amount from EVERY hit, so light rapid
+     rounds bounce off and heavy shots punch through.
+   · cloak — Phantoms can't be targeted until slowed; Frost sees through.
+   · heal — Menders repair nearby hulls; pierce/chain reach them mid-pack.
+   `intro` is the wave the type first appears (drives NEW tags + banners),
+   `announce`d types get a NEW CONTACT banner explaining their trait.
    ====================================================================== */
 const ENEMY_TYPES = {
-  scout:   { name: 'Scout',   hp: 22,   speed: 2.2, reward: 4,  leak: 1,  radius: 0.26, color: '#ffb84b', shape: 'dart' },
-  raider:  { name: 'Raider',  hp: 60,   speed: 1.6, reward: 7,  leak: 1,  radius: 0.3,  color: '#ff4ecb', shape: 'dart' },
-  brute:   { name: 'Brute',   hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff5566', shape: 'hex' },
-  swarm:   { name: 'Swarmer', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri' },
-  shield:  { name: 'Warden',  hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'dart', shield: 0.5 },
-  boss:    { name: 'Dreadnought', hp: 1500, speed: 0.7, reward: 150, leak: 10, radius: 0.55, color: '#ff5566', shape: 'boss' },
+  scout:   { name: 'Scout',   icon: '▸', hp: 22,   speed: 2.2, reward: 4,  leak: 1,  radius: 0.26, color: '#ffb84b', shape: 'dart', intro: 1,
+             trait: 'Quick, fragile line ship.' },
+  raider:  { name: 'Raider',  icon: '▶', hp: 60,   speed: 1.6, reward: 7,  leak: 1,  radius: 0.3,  color: '#ff4ecb', shape: 'dart', intro: 3,
+             trait: 'Tougher assault ship.' },
+  brute:   { name: 'Brute',   icon: '⬢', hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff5566', shape: 'hex', intro: 6,
+             trait: 'Slow heavy hull — costs 2 shields if it gets through.' },
+  swarm:   { name: 'Swarmer', icon: '▴', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri', intro: 7, announce: true,
+             trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
+  shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'dart', shieldHits: 6, intro: 11, announce: true,
+             trait: 'Energy shield blocks the first hits outright — rapid fire strips it, heavy shots are wasted on it.' },
+  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'hex', armor: 6, intro: 21, announce: true,
+             trait: 'Plating deflects flat damage from every hit — light rounds bounce off, heavy shots punch through.' },
+  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'dart', cloak: true, intro: 31, announce: true,
+             trait: 'Cloaked — turrets can\'t lock on until it\'s slowed. Frost sees through the cloak.' },
+  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, intro: 41, announce: true,
+             trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
+  boss:    { name: 'Dreadnought', icon: '☠', hp: 1500, speed: 0.7, reward: 150, leak: 10, radius: 0.55, color: '#ff5566', shape: 'boss', intro: 10,
+             trait: 'Massive command ship. Enrages below half health.' },
 };
 
 // Difficulty scaling with wave number.
@@ -422,38 +443,97 @@ function hpMult(lvl) { return 1 + 0.22 * (lvl - 1) + 0.016 * (lvl - 1) * (lvl - 
 function speedMult(lvl) { return 1 + 0.006 * lvl; }
 function rewardMult(lvl) { return 1 + 0.04 * lvl; }
 
-/* Build the spawn list for a wave: [{type, t}] sorted by spawn time. */
+// Deterministic per-wave RNG — wave N is always the same wave N, so the
+// build-phase preview matches what actually spawns and retries are fair.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* Build the spawn list for a wave: [{type, t}] sorted by spawn time.
+   Waves are composed of squadron blocks (probe line, debut block, main
+   body, closer spike) instead of per-ship dice rolls, so each wave has a
+   shape. Must stay pure/deterministic: the preview UI calls it early. */
 function buildWave(lvl) {
+  const rng = mulberry32(lvl * 7919 + 1);
   const list = [];
   let t = 0.5;
   const gap = Math.max(0.32, 1.05 - lvl * 0.014); // spawns tighten as waves go up
   const push = (type, extraGap = 0) => { list.push({ type, t }); t += gap + extraGap; };
+  const rest = (d) => { t += d; };
+  const lineOf = (type, n) => { for (let i = 0; i < n; i++) push(type); };
+  const packOf = (type, n, tight = 0.14) => { for (let k = 0; k < n; k++) { list.push({ type, t }); t += tight; } t += gap; };
+  const mixed = (types, n) => { for (let i = 0; i < n; i++) push(types[(rng() * types.length) | 0]); };
+  const sector = Math.floor((lvl - 1) / 10) + 1;
 
   if (lvl % 10 === 0) {
-    // Boss wave: escorts, then the Dreadnought, then a rear guard.
-    const escorts = 4 + Math.floor(lvl / 5);
-    for (let i = 0; i < escorts; i++) push(lvl >= 20 ? 'shield' : 'raider');
-    t += 1.5;
+    // Boss wave: sector-flavored escorts, the Dreadnought, then a rear guard.
+    lineOf(['raider', 'shield', 'aegis', 'phantom', 'aegis'][sector - 1], 4 + Math.floor(lvl / 5));
+    if (lvl >= 50) { rest(0.8); lineOf('mender', 2); }
+    rest(1.5);
     push('boss', 2);
-    for (let i = 0; i < Math.floor(lvl / 4); i++) push(lvl >= 30 ? 'brute' : 'scout');
+    lineOf(lvl >= 30 ? 'brute' : 'scout', Math.floor(lvl / 4));
     return list;
   }
 
-  const count = Math.min(12 + Math.floor(lvl * 1.7), 68);
-  for (let i = 0; i < count; i++) {
-    let type = 'scout';
-    const roll = Math.random();
-    if (lvl >= 14 && roll < 0.16) type = 'shield';
-    else if (lvl >= 6 && roll < 0.34) type = 'brute';
-    else if (lvl >= 3 && roll < 0.62) type = 'raider';
-    if (lvl >= 9 && i % 9 === 0) {
-      // swarm burst — a tight pack of swarmers
-      for (let k = 0; k < 6; k++) { list.push({ type: 'swarm', t }); t += 0.14; }
-      t += gap;
-      continue;
+  // Every x7 wave is the sector's themed gimmick — a memorable spike that
+  // tests whether the player built the sector's counter.
+  if (lvl % 10 === 7) {
+    switch (sector) {
+      case 1: packOf('swarm', 8, 0.16); lineOf('scout', 5); packOf('swarm', 10); rest(1); packOf('swarm', 12, 0.12); return list;
+      case 2: lineOf('shield', 9); rest(1.2); packOf('swarm', 8); lineOf('shield', 6); return list;
+      case 3: lineOf('aegis', 8); rest(1.2); lineOf('brute', 4); lineOf('aegis', 6); return list;
+      case 4: lineOf('phantom', 6); rest(1); mixed(['phantom', 'raider'], 10); rest(1); lineOf('phantom', 5); return list;
+      case 5: push('mender'); lineOf('brute', 4); push('mender'); lineOf('brute', 4); rest(1.2); push('mender'); lineOf('aegis', 5); return list;
     }
-    push(type);
   }
+
+  // filler pool grows with the roster (raider twice = weighted up)
+  const pool = ['scout'];
+  if (lvl >= 3) pool.push('raider');
+  if (lvl >= 5) pool.push('raider');
+  if (lvl >= 6) pool.push('brute');
+  if (lvl >= 13) pool.push('shield');
+  if (lvl >= 23) pool.push('aegis');
+  if (lvl >= 33) pool.push('phantom');
+
+  let budget = Math.min(12 + Math.floor(lvl * 1.5), 56);
+
+  // probe line
+  const openN = 4 + Math.floor(lvl / 8);
+  lineOf(lvl >= 8 && rng() < 0.5 ? 'swarm' : 'scout', openN);
+  budget -= openN;
+  rest(0.8);
+
+  // each sector's first wave debuts its new enemy right after the probe
+  const debut = { 11: 'shield', 21: 'aegis', 31: 'phantom', 41: 'mender' }[lvl];
+  if (debut) {
+    if (debut === 'mender') { push('mender'); lineOf('raider', 3); push('mender'); lineOf('raider', 3); }
+    else lineOf(debut, 4 + ((rng() * 2) | 0));
+    budget -= 6;
+    rest(1);
+  }
+
+  // main body
+  const mainN = Math.max(6, Math.floor(budget * 0.65));
+  mixed(pool, Math.floor(mainN / 2));
+  if (lvl >= 8 && rng() < 0.75) packOf('swarm', 5 + ((rng() * 4) | 0));
+  if (lvl >= 42 && rng() < 0.7) push('mender');
+  mixed(pool, Math.ceil(mainN / 2));
+
+  // closer spike
+  rest(0.8);
+  if (lvl >= 8 && rng() < 0.5) packOf('swarm', 6);
+  else if (lvl >= 6) lineOf('brute', 2 + ((rng() * 2) | 0));
+  else lineOf('scout', 3);
+  if (lvl >= 44 && rng() < 0.5) push('mender');
+
   return list;
 }
 
@@ -486,6 +566,7 @@ const state = {
   bestWave: parseInt(localStorage.getItem(KEY_BEST) || '0', 10),
   hiScore: parseInt(localStorage.getItem(KEY_SCORE) || '0', 10),
   checkpoint: 1,
+  seen: new Set(),     // enemy types encountered this run (NEW tags/banners)
   placing: null,       // tower type index being placed, or null
   selected: null,      // built tower selected for upgrade/sell
   hover: null,         // {col,row} under the pointer
@@ -519,6 +600,7 @@ function spawnEnemy(type) {
   const def = ENEMY_TYPES[type];
   const lvl = state.level;
   const hp = def.hp * hpMult(lvl);
+  const shieldHits = def.shieldHits ? def.shieldHits + Math.floor(lvl / 12) : 0;
   const e = {
     type, def,
     s: 0,
@@ -526,8 +608,9 @@ function spawnEnemy(type) {
     speed: def.speed * speedMult(lvl),
     reward: Math.ceil(def.reward * rewardMult(lvl)),
     slowUntil: 0, slowPct: 0,
-    shield: def.shield ? hp * def.shield : 0,
-    shieldMax: def.shield ? hp * def.shield : 0,
+    shieldHits, shieldHitsMax: shieldHits, shieldRegen: 0,
+    armor: def.armor ? def.armor * (1 + 0.05 * lvl) : 0,
+    healPulse: 0,
     lastHit: -99,
     x: 0, y: 0, angle: 0,
     wob: Math.random() * Math.PI * 2,
@@ -543,10 +626,24 @@ function spawnEnemy(type) {
 function damageEnemy(e, dmg, color) {
   if (e.dead) return;
   e.lastHit = state.waveTime;
-  if (e.shield > 0) {
-    const absorbed = Math.min(e.shield, dmg);
-    e.shield -= absorbed;
-    dmg -= absorbed;
+  // Warden shield: each charge eats one full hit, regardless of damage.
+  if (e.shieldHits > 0) {
+    e.shieldHits--;
+    fx.push({ kind: 'ring', x: e.x, y: e.y, life: 0.18, maxLife: 0.18, r: e.def.radius * 1.9, color: '#4bf5ff' });
+    if (e.shieldHits === 0) addFloat(e.x, e.y, 'SHIELD DOWN', '#4bf5ff');
+    return;
+  }
+  // Aegis armor: flat reduction per hit. Fully-blocked hits show a
+  // throttled DEFLECTED float so the player can see why it isn't dying.
+  if (e.armor) {
+    dmg = Math.max(0, dmg - e.armor);
+    if (dmg === 0) {
+      if (state.waveTime - (e.lastDeflect || -9) > 0.6) {
+        e.lastDeflect = state.waveTime;
+        addFloat(e.x, e.y, 'DEFLECTED', '#8fa8ff');
+      }
+      return;
+    }
   }
   e.hp -= dmg;
   if (e.type === 'boss' && !e.enraged && e.hp < e.maxHp * 0.5) {
@@ -616,7 +713,7 @@ function fireTower(t, st, target) {
         dmg *= 0.72;
         let next = null, bd = 2.3;
         for (const e of enemies) {
-          if (e.dead || hitSet.has(e)) continue;
+          if (e.dead || hitSet.has(e) || !revealed(e)) continue;
           const d = Math.hypot(e.x - cur.x, e.y - cur.y);
           if (d < bd) { bd = d; next = e; }
         }
@@ -649,6 +746,9 @@ function fireTower(t, st, target) {
 
 function effSlow(e) { return state.waveTime < e.slowUntil ? 1 - e.slowPct : 1; }
 
+// Cloaked ships can't be targeted until slowed; frost towers see through.
+function revealed(e) { return !e.def.cloak || state.waveTime < e.slowUntil; }
+
 /* ======================================================================
    WAVE FLOW
    ====================================================================== */
@@ -658,7 +758,18 @@ function startWave() {
   state.waveTime = 0;
   spawnQueue = buildWave(state.level);
   const sector = Math.floor((state.level - 1) / 10) + 1;
-  showBanner('WAVE ' + state.level, 'SECTOR ' + sector + ' — ' + currentMap().name.toUpperCase());
+  // first-ever sighting of an announced type gets its intro banner instead
+  // of the generic wave banner
+  let debut = null;
+  for (const s of spawnQueue) {
+    if (!state.seen.has(s.type)) {
+      state.seen.add(s.type);
+      if (!debut && ENEMY_TYPES[s.type].announce) debut = ENEMY_TYPES[s.type];
+    }
+  }
+  if (debut) showBanner('⚠ NEW CONTACT: ' + debut.name.toUpperCase(), debut.trait);
+  else showBanner('WAVE ' + state.level, 'SECTOR ' + sector + ' — ' + currentMap().name.toUpperCase());
+  updateWavePreview();
   updateHUD();
 }
 
@@ -695,6 +806,7 @@ function waveComplete() {
   }
 
   if (state.auto) state.autoTimer = 2.4;
+  updateWavePreview();
   updateHUD();
 }
 
@@ -723,6 +835,7 @@ function endGame(victory) {
   topbarEl.classList.add('hidden');
   shopEl.classList.add('hidden');
   overEl.classList.remove('hidden');
+  updateWavePreview();
 }
 
 function leak(e) {
@@ -755,6 +868,62 @@ function showBanner(main, sub) {
   clearTimeout(bannerTimeout);
   bannerTimeout = setTimeout(() => bannerEl.classList.add('hidden'), 1650);
 }
+
+/* ======================================================================
+   WAVE PREVIEW + INTEL — build-phase strip showing exactly what the next
+   wave contains (buildWave is deterministic, so the preview is honest).
+   Tapping a chip opens an intel card with the type's stats and trait.
+   ====================================================================== */
+const previewEl = $('wavePreview'), chipsEl = $('wpChips'), intelEl = $('intelCard');
+
+function updateWavePreview() {
+  if (state.mode !== 'playing' || state.phase !== 'build') {
+    previewEl.classList.add('hidden');
+    hideIntel();
+    return;
+  }
+  const counts = {};
+  for (const s of buildWave(state.level)) counts[s.type] = (counts[s.type] || 0) + 1;
+  $('wpLabel').textContent = 'WAVE ' + state.level;
+  chipsEl.innerHTML = '';
+  for (const type of Object.keys(ENEMY_TYPES)) {
+    if (!counts[type]) continue;
+    const def = ENEMY_TYPES[type];
+    const isNew = !state.seen.has(type);
+    const chip = document.createElement('button');
+    chip.className = 'wp-chip' + (isNew ? ' new' : '');
+    chip.style.setProperty('--ec', def.color);
+    chip.innerHTML = '<span class="wp-icon">' + def.icon + '</span>×' + counts[type] +
+      (isNew ? '<span class="wp-newtag">NEW</span>' : '');
+    chip.addEventListener('click', (ev) => { ev.stopPropagation(); toggleIntel(type); });
+    chipsEl.appendChild(chip);
+  }
+  previewEl.style.top = (topbarEl.offsetHeight + 4) + 'px';
+  previewEl.classList.remove('hidden');
+}
+
+function toggleIntel(type) {
+  if (intelEl.dataset.type === type && !intelEl.classList.contains('hidden')) { hideIntel(); return; }
+  const def = ENEMY_TYPES[type];
+  intelEl.dataset.type = type;
+  intelEl.innerHTML =
+    '<div class="ic-name" style="color:' + def.color + '">' + def.icon + ' ' + def.name.toUpperCase() + '</div>' +
+    '<div class="ic-stats">HP ' + Math.round(def.hp * hpMult(state.level)) +
+    ' · SPEED ' + def.speed.toFixed(1) +
+    ' · LEAK −' + def.leak +
+    ' · BOUNTY $' + Math.ceil(def.reward * rewardMult(state.level)) + '</div>' +
+    (def.trait ? '<div class="ic-trait">' + def.trait + '</div>' : '');
+  intelEl.style.top = (topbarEl.offsetHeight + 46) + 'px';
+  intelEl.classList.remove('hidden');
+}
+
+function hideIntel() { intelEl.classList.add('hidden'); }
+
+document.addEventListener('click', (ev) => {
+  if (intelEl.classList.contains('hidden')) return;
+  if (ev.target.closest('#intelCard') || ev.target.closest('.wp-chip')) return;
+  hideIntel();
+});
 
 /* ======================================================================
    SHOP / UPGRADE UI
@@ -926,8 +1095,8 @@ window.addEventListener('keydown', (ev) => {
   }
   if (DEBUG) {
     if (ev.key === 'm') { state.money += 5000; updateHUD(); }
-    if (ev.key === 'k') { for (const e of enemies) damageEnemy(e, 1e9); }
-    if (ev.key === 'j' && state.phase === 'build') { state.level = Math.min(50, state.level + 9); updateHUD(); }
+    if (ev.key === 'k') { for (const e of enemies) { e.shieldHits = 0; e.armor = 0; damageEnemy(e, 1e9); } }
+    if (ev.key === 'j' && state.phase === 'build') { state.level = Math.min(50, state.level + 9); updateHUD(); updateWavePreview(); }
   }
 });
 
@@ -990,6 +1159,8 @@ function startGame(fromWave) {
   state.autoTimer = 0;
   state.placing = null;
   state.selected = null;
+  // checkpoint starts skip the intro banners for types debuted earlier
+  state.seen = new Set(Object.keys(ENEMY_TYPES).filter((k) => ENEMY_TYPES[k].intro < cp.wave));
   towers = []; grid = {};
   enemies = []; bolts = []; shells = []; fx = []; parts = []; floats = [];
   spawnQueue = [];
@@ -1003,6 +1174,7 @@ function startGame(fromWave) {
   resize();
   Sound.startMusic();
   updateHUD();
+  updateWavePreview();
   showBanner('SECTOR ' + (Math.floor((cp.wave - 1) / 10) + 1) + ' — ' + currentMap().name.toUpperCase(), 'build turrets, then start the wave');
 }
 
@@ -1015,6 +1187,7 @@ function goToMenu() {
   topbarEl.classList.add('hidden');
   shopEl.classList.add('hidden');
   buildCheckpointCards();
+  updateWavePreview();
   resize();
 }
 
@@ -1125,20 +1298,38 @@ function update(dt) {
     const p = pathPoint(map, e.s);
     e.wob += dt * 6;
     e.x = p.x; e.y = p.y; e.angle = p.angle;
-    // shield regen: 8%/s after 1.5s without being hit
-    if (e.shieldMax > 0 && e.shield < e.shieldMax && state.waveTime - e.lastHit > 1.5) {
-      e.shield = Math.min(e.shieldMax, e.shield + e.shieldMax * 0.08 * dt);
-    }
+    // shield charges regen one at a time after 2.5s without being hit
+    if (e.shieldHitsMax > 0 && e.shieldHits < e.shieldHitsMax && state.waveTime - e.lastHit > 2.5) {
+      e.shieldRegen += dt;
+      if (e.shieldRegen >= 0.9) { e.shieldRegen = 0; e.shieldHits++; }
+    } else e.shieldRegen = 0;
   }
   enemies = enemies.filter((e) => !e.dead);
+
+  // menders repair nearby hulls (not themselves, not each other)
+  for (const m of enemies) {
+    if (!m.def.heal) continue;
+    const rate = m.def.heal * hpMult(state.level);
+    for (const e of enemies) {
+      if (e === m || e.def.heal || e.hp >= e.maxHp) continue;
+      if (Math.hypot(e.x - m.x, e.y - m.y) <= m.def.healRange) e.hp = Math.min(e.maxHp, e.hp + rate * dt);
+    }
+    m.healPulse -= dt;
+    if (m.healPulse <= 0) {
+      m.healPulse = 1.1;
+      fx.push({ kind: 'ring', x: m.x, y: m.y, life: 0.55, maxLife: 0.55, r: m.def.healRange, color: '#59ffb6' });
+    }
+  }
 
   // towers
   for (const t of towers) {
     t.cool -= dt;
     const st = towerStats(t);
+    const seesCloaked = TOWER_TYPES[t.type].id === 'frost';
     let best = null, bestS = -1;
     for (const e of enemies) {
       if (e.dead) continue;
+      if (!revealed(e) && !seesCloaked) continue;
       const d = Math.hypot(e.x - t.x, e.y - t.y);
       if (d <= st.range && e.s > bestS) { best = e; bestS = e.s; }
     }
@@ -1426,6 +1617,8 @@ function drawEnemy(e) {
   const bob = Math.sin(e.wob) * r * 0.12;
   ctx.save();
   ctx.translate(x, y + bob);
+  // cloaked phantoms render as a faint shimmer until slowed/revealed
+  if (!revealed(e)) ctx.globalAlpha = 0.3 + Math.sin(e.wob * 1.7) * 0.12;
   ctx.shadowColor = e.def.color;
   ctx.shadowBlur = 12;
   ctx.fillStyle = e.def.color;
@@ -1445,6 +1638,11 @@ function drawEnemy(e) {
     ctx.rotate(e.angle);
     poly(6, r, e.def.color);
     circle(0, 0, r * 0.4, '#3a0e18');
+  } else if (e.def.shape === 'orb') {
+    circle(0, 0, r, e.def.color);
+    ctx.fillStyle = '#0b3524';
+    ctx.fillRect(-r * 0.6, -r * 0.17, r * 1.2, r * 0.34);
+    ctx.fillRect(-r * 0.17, -r * 0.6, r * 0.34, r * 1.2);
   } else if (e.def.shape === 'tri') {
     ctx.rotate(e.angle);
     ctx.beginPath();
@@ -1468,13 +1666,16 @@ function drawEnemy(e) {
   }
   ctx.restore();
 
-  // shield ring
-  if (e.shield > 0) {
-    ctx.beginPath();
-    ctx.arc(x, y + bob, r * 1.5, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(75, 245, 255, ' + (0.25 + 0.5 * (e.shield / e.shieldMax)) + ')';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+  // shield charges drawn as arc segments — one pip per remaining hit
+  if (e.shieldHitsMax > 0 && e.shieldHits > 0) {
+    const seg = (Math.PI * 2) / e.shieldHitsMax;
+    ctx.strokeStyle = 'rgba(75, 245, 255, 0.85)';
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < e.shieldHits; i++) {
+      ctx.beginPath();
+      ctx.arc(x, y + bob, r * 1.5, i * seg + seg * 0.12, (i + 1) * seg - seg * 0.12);
+      ctx.stroke();
+    }
   }
 
   // slow tint

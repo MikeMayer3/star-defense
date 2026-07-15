@@ -286,6 +286,75 @@ canvas {
 }
 .hud-btn.off { opacity: 0.4; }
 
+/* ============ WAVE PREVIEW ============ */
+#wavePreview {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: rgba(8, 12, 34, 0.78);
+  border: 1px solid rgba(75, 245, 255, 0.3);
+  border-radius: 999px;
+  backdrop-filter: blur(3px);
+  max-width: 94vw;
+}
+#wavePreview.hidden { display: none; }
+.wp-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #7fa6d6;
+  white-space: nowrap;
+}
+.wp-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.wp-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ec, var(--neon-cyan));
+  color: #eaf6ff;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.wp-chip .wp-icon { color: var(--ec, var(--neon-cyan)); filter: drop-shadow(0 0 4px var(--ec)); font-size: 0.85rem; }
+.wp-chip.new { box-shadow: 0 0 10px var(--ec); }
+.wp-newtag {
+  background: var(--ec, var(--neon-cyan));
+  color: #04081a;
+  font-size: 0.55rem;
+  font-weight: 900;
+  border-radius: 999px;
+  padding: 1px 5px;
+  margin-left: 2px;
+  letter-spacing: 0.5px;
+}
+#intelCard {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 16;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 12px;
+  padding: 10px 16px;
+  text-align: center;
+  max-width: 340px;
+  backdrop-filter: blur(4px);
+}
+#intelCard.hidden { display: none; }
+.ic-name { font-weight: 800; letter-spacing: 1px; font-size: 0.9rem; text-shadow: 0 0 10px currentColor; }
+.ic-stats { font-size: 0.7rem; color: #9fb6d9; margin-top: 3px; }
+.ic-trait { font-size: 0.72rem; color: #cfe4ff; margin-top: 5px; line-height: 1.4; }
+
 /* ============ SHOP BAR ============ */
 #shop {
   position: fixed;
@@ -434,4 +503,6 @@ canvas {
   .tower-card { min-width: 80px; }
   .upgrade-panel { flex-wrap: wrap; padding: 8px 10px; }
   .up-info { flex-basis: 100%; text-align: center; }
+  .wp-chip { padding: 2px 7px; font-size: 0.66rem; }
+  .wp-label { display: none; }
 }

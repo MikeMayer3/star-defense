@@ -4,6 +4,8 @@ A free neon tower-defense browser game. No build step, no dependencies, no accou
 
 **Survive 50 waves across 5 sectors.** Alien ships fly a glowing lane toward your mothership; build turrets on open tiles to stop them. Kills earn credits to spend on more turrets and upgrades. Every 10th wave is a Dreadnought boss, and every cleared sector swaps in a new map (your turrets are recalled for a full refund).
 
+Waves are deterministic (wave N is always the same wave N) and composed of squadron blocks, and the build phase shows a preview of exactly what's coming — tap an enemy chip for its stats. Each sector debuts a new enemy that counters a lazy build: Wardens (wave 11+) carry shields that block the first hits outright (rapid fire strips them), Aegis cruisers (21+) deflect flat damage per hit (heavy shots punch through), Phantoms (31+) are cloaked until slowed (Frost sees through), and Menders (41+) heal nearby ships (pierce and chain reach them mid-pack). Every x7 wave is that sector's themed gimmick spike.
+
 ## The six turrets
 
 | Turret | Cost | Specialty |
