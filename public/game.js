@@ -428,11 +428,11 @@ const ENEMY_TYPES = {
              trait: 'Slow heavy hull — costs 2 shields if it gets through.' },
   swarm:   { name: 'Swarmer', icon: '▴', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri', debutMap: 0, debutWave: 6, announce: true,
              trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
-  shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'dart', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
+  shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'diamond', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
              trait: 'Energy shield blocks the first hits outright — rapid fire strips it, heavy shots are wasted on it.' },
-  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'hex', armor: 6, debutMap: 1, debutWave: 8, announce: true,
+  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'pentagon', armor: 6, debutMap: 1, debutWave: 8, announce: true,
              trait: 'Plating deflects flat damage from every hit — light rounds bounce off, heavy shots punch through.' },
-  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'dart', cloak: true, debutMap: 2, debutWave: 8, announce: true,
+  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'ring', cloak: true, debutMap: 2, debutWave: 8, announce: true,
              trait: 'Cloaked — turrets can\'t lock on until it\'s slowed. Frost sees through the cloak.' },
   mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 3, debutWave: 8, announce: true,
              trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
@@ -1596,32 +1596,56 @@ function drawTower(t) {
   ctx.fillStyle = ty.color;
   switch (ty.id) {
     case 'blaster':
-      ctx.fillRect(0, -s * 0.12, s * 0.85, s * 0.24);
-      circle(0, 0, s * 0.34, ty.color);
+      // compact blaster pistol: blocky body, short barrel, bright muzzle tip
+      roundRect(-s * 0.32, -s * 0.26, s * 0.5, s * 0.52, s * 0.1);
+      ctx.fill();
+      ctx.fillRect(s * 0.1, -s * 0.11, s * 0.75, s * 0.22);
+      circle(s * 0.82, 0, s * 0.1, '#ffffff');
       break;
     case 'frost':
-      poly(6, s * 0.42, ty.color);
-      circle(0, 0, s * 0.18, '#ffffff');
+      // snowflake: six-pointed star with an icy core
+      star(6, s * 0.48, s * 0.16, ty.color);
+      circle(0, 0, s * 0.16, '#ffffff');
       break;
     case 'gatling':
-      ctx.fillRect(0, -s * 0.3, s * 0.75, s * 0.14);
-      ctx.fillRect(0, -s * 0.07, s * 0.9, s * 0.14);
-      ctx.fillRect(0, s * 0.16, s * 0.75, s * 0.14);
-      circle(0, 0, s * 0.32, ty.color);
+      // ring of stubby barrels around a hub — reads as a spinning cluster
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.save();
+        ctx.translate(Math.cos(a) * s * 0.3, Math.sin(a) * s * 0.3);
+        ctx.rotate(a);
+        ctx.fillRect(0, -s * 0.07, s * 0.34, s * 0.14);
+        ctx.restore();
+      }
+      circle(0, 0, s * 0.24, ty.color);
       break;
-    case 'mortar':
-      circle(0, 0, s * 0.42, ty.color);
-      ctx.fillStyle = '#0a0e28';
+    case 'mortar': {
+      // wide muzzle bore with a burst of spikes around the rim
+      circle(0, 0, s * 0.44, ty.color);
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        ctx.save();
+        ctx.translate(Math.cos(a) * s * 0.44, Math.sin(a) * s * 0.44);
+        ctx.rotate(a);
+        poly(3, s * 0.13, '#ffe74b');
+        ctx.restore();
+      }
       circle(0, 0, s * 0.2, '#0a0e28');
       break;
+    }
     case 'tesla':
-      poly(3, s * 0.4, ty.color);
-      circle(s * 0.05, 0, s * 0.16, '#ffffff');
+      // jagged lightning bolt with a bright spark core
+      lightningBolt(s * 0.55, ty.color);
+      circle(s * 0.05, 0, s * 0.12, '#ffffff');
       break;
     case 'rail':
+      // long pierce barrel, plus a small bullseye scope mounted above it —
+      // kept clear of the barrel silhouette so it reads as a scope/reticle
+      // rather than a key (a ring beside or around the barrel reads as one)
       ctx.fillRect(-s * 0.2, -s * 0.1, s * 1.15, s * 0.2);
       ctx.fillRect(s * 0.55, -s * 0.18, s * 0.25, s * 0.36);
-      circle(-s * 0.05, 0, s * 0.3, ty.color);
+      ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color);
+      circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff');
       break;
   }
   ctx.restore();
@@ -1675,6 +1699,46 @@ function poly(n, r, color) {
   ctx.fill();
 }
 
+function star(n, rOuter, rInner, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 === 0 ? rOuter : rInner;
+    const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+    const px_ = Math.cos(a) * r, py_ = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px_, py_); else ctx.lineTo(px_, py_);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+// donut ring — used for the rail cannon's targeting-reticle hub
+function ringDonut(x, y, rOuter, rInner, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, rOuter, 0, Math.PI * 2);
+  ctx.arc(x, y, rInner, 0, Math.PI * 2, true);
+  ctx.fill('evenodd');
+}
+
+// jagged flash-bolt silhouette (long axis along local +x) for the tesla coil.
+// The pinched waist near the origin (vs. the wide arm tips) is what reads as
+// a lightning zigzag instead of a smooth dart once the glow blur softens it.
+function lightningBolt(r, color) {
+  const pts = [
+    [0.6, -0.1], [0.05, -0.55], [0.15, -0.08],
+    [-0.6, 0.1], [-0.05, 0.55], [-0.15, 0.08],
+  ];
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  pts.forEach(([px_, py_], i) => {
+    const X = px_ * r, Y = py_ * r;
+    if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  });
+  ctx.closePath();
+  ctx.fill();
+}
+
 function drawEnemy(e) {
   const x = px(e.x), y = py(e.y);
   const r = e.def.radius * cell;
@@ -1702,6 +1766,30 @@ function drawEnemy(e) {
     ctx.rotate(e.angle);
     poly(6, r, e.def.color);
     circle(0, 0, r * 0.4, '#3a0e18');
+  } else if (e.def.shape === 'pentagon') {
+    ctx.rotate(e.angle);
+    poly(5, r, e.def.color);
+    circle(0, 0, r * 0.35, '#0f1640');
+  } else if (e.def.shape === 'diamond') {
+    ctx.rotate(e.angle);
+    ctx.beginPath();
+    ctx.moveTo(r * 1.1, 0);
+    ctx.lineTo(0, -r * 0.85);
+    ctx.lineTo(-r * 1.1, 0);
+    ctx.lineTo(0, r * 0.85);
+    ctx.closePath();
+    ctx.fill();
+    circle(0, 0, r * 0.2, '#eaffff');
+  } else if (e.def.shape === 'ring') {
+    ctx.rotate(e.angle);
+    ctx.strokeStyle = e.def.color;
+    ctx.lineWidth = Math.max(2, r * 0.32);
+    ctx.setLineDash([r * 0.35, r * 0.3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    circle(0, 0, r * 0.22, e.def.color);
   } else if (e.def.shape === 'orb') {
     circle(0, 0, r, e.def.color);
     ctx.fillStyle = '#0b3524';
