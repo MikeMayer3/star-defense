@@ -39,6 +39,17 @@ python3 -m http.server 8080 --directory public
 
 Then open `http://localhost:8080`. Add `?debug` to the URL for playtesting cheats (M = +$5000, K = kill wave, J = skip 9 waves).
 
+## Android
+
+The game ships to Android as a Trusted Web Activity (package
+`com.allyourbase3.stardefense`) wrapping the live site — the installed app
+always runs whatever is deployed, no store update needed for game changes.
+The Bubblewrap wrapper project, signing keystore, and build toolchain live
+outside this repo (on the Windows dev machine at `C:\Users\Micha\StarDefenseAndroid`).
+`public/.well-known/assetlinks.json` holds the signing-cert fingerprints that
+let the app run fullscreen; it must list both the local upload key and the
+Play App Signing key.
+
 ## Deploying
 
 Deployed as a Cloudflare **Worker with static assets**, git-connected ("Workers Builds") — every push to `main` triggers an automatic deploy using `wrangler.jsonc`. To set up fresh:
