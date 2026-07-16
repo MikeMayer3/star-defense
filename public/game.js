@@ -1879,3 +1879,10 @@ initStars();
 buildShopCards();
 buildMapCards();
 requestAnimationFrame(loop);
+
+// PWA: offline cache + installability (required for the Android TWA wrap)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* file:// or unsupported */ });
+  });
+}
