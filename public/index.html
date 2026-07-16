@@ -52,42 +52,38 @@
   </div>
 </div>
 
-<!-- ============ LEFT RAIL: Space Bucks (in-game) ============ -->
+<!-- ============ LEFT RAIL: Space Bucks / Shields / Wave (in-game) ============ -->
 <div id="leftRail" class="hidden">
   <div class="rail-stat money-stat">
     <div class="rail-label">SPACE<br>BUCKS</div>
     <div class="rail-value" id="moneyVal">$0</div>
   </div>
+  <div class="rail-stat lives-stat">
+    <div class="rail-label">SHIELDS</div>
+    <div class="rail-value" id="livesVal">20</div>
+  </div>
+  <div class="rail-stat wave-stat">
+    <div class="rail-label">WAVE</div>
+    <div class="rail-value" id="waveVal">1 / 30</div>
+  </div>
 </div>
 
-<!-- ============ TOP HUD (in-game) ============ -->
+<!-- ============ TOP-RIGHT CORNER CONTROLS (in-game) ============ -->
 <div id="topbar" class="hidden">
-  <div class="hud-block lives-block">
-    <div class="hud-label">SHIELDS</div>
-    <div class="hud-value" id="livesVal">20</div>
-  </div>
-  <div class="hud-block">
-    <div class="hud-label">WAVE</div>
-    <div class="hud-value" id="waveVal">1 / 50</div>
-  </div>
-  <div class="hud-block">
-    <div class="hud-label">SCORE</div>
-    <div class="hud-value" id="scoreVal">0</div>
-  </div>
-  <button id="waveBtn" class="wave-btn">▶ START WAVE</button>
-  <div class="topbar-right">
-    <button id="speedBtn" class="hud-btn" title="Game speed">1×</button>
-    <button id="autoBtn" class="hud-btn" title="Auto-start next wave">AUTO</button>
-    <button id="pauseBtn" class="hud-btn" title="Pause">⏸</button>
-  </div>
+  <button id="speedBtn" class="hud-btn" title="Game speed">1×</button>
+  <button id="autoBtn" class="hud-btn" title="Auto-start next wave">AUTO</button>
+  <button id="pauseBtn" class="hud-btn" title="Pause">⏸</button>
 </div>
 
-<!-- ============ WAVE PREVIEW (build phase) ============ -->
+<!-- ============ WAVE PREVIEW (top middle, build phase) ============ -->
 <div id="wavePreview" class="hidden">
   <span id="wpLabel" class="wp-label">WAVE 1</span>
   <div id="wpChips" class="wp-chips"><!-- enemy chips injected by game.js --></div>
 </div>
 <div id="intelCard" class="hidden"></div>
+
+<!-- ============ START WAVE (bottom middle, floats over the board) ============ -->
+<button id="waveBtn" class="wave-btn">▶ START WAVE</button>
 
 <!-- ============ RIGHT RAIL: tower shop (in-game) ============ -->
 <div id="shop" class="hidden">

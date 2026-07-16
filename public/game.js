@@ -33,14 +33,17 @@ function resize() {
   bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // HUD lives in side rails (money/shop) plus a slim top strip between them,
-  // so the board gets the full height minus just the top strip — this is
-  // what makes the grid readable on a landscape phone (see CLAUDE.md notes
-  // on this layout if you're ever tempted to move chrome back to the bottom).
-  const topbar = document.getElementById('topbar');
+  // HUD lives in side rails (money/shields/wave, and the tower shop) plus a
+  // small top-right button cluster and the top-center wave preview strip;
+  // this is what makes the grid readable on a landscape phone (see
+  // CLAUDE.md notes on this layout if tempted to move chrome back to the
+  // top/bottom). topH is a fixed clearance sized for the wave-preview
+  // strip (top:10px, ~36px tall) rather than the (now tiny) corner button
+  // cluster's own height, since the preview is what actually needs the
+  // board's top edge to stay clear.
   const leftRail = document.getElementById('leftRail');
   const shop = document.getElementById('shop');
-  const topH = (!topbar.classList.contains('hidden') && topbar.offsetHeight) || 54;
+  const topH = 48;
   const leftW = (!leftRail.classList.contains('hidden') && leftRail.offsetWidth) || 108;
   const rightW = (!shop.classList.contains('hidden') && shop.offsetWidth) || 108;
   cell = Math.min((W - leftW - rightW - 12) / COLS, (H - topH - 10) / ROWS);
@@ -1103,7 +1106,6 @@ function updateWavePreview() {
     chip.addEventListener('click', (ev) => { ev.stopPropagation(); toggleIntel(type); });
     chipsEl.appendChild(chip);
   }
-  previewEl.style.top = (topbarEl.offsetHeight + 4) + 'px';
   previewEl.classList.remove('hidden');
 }
 
@@ -1118,7 +1120,6 @@ function toggleIntel(type) {
     ' · LEAK −' + def.leak +
     ' · BOUNTY $' + Math.ceil(def.reward * rewardMult(state.level)) + '</div>' +
     (def.trait ? '<div class="ic-trait">' + def.trait + '</div>' : '');
-  intelEl.style.top = (topbarEl.offsetHeight + 46) + 'px';
   intelEl.classList.remove('hidden');
 }
 
@@ -1144,8 +1145,7 @@ function buildShopCards() {
     card.innerHTML =
       '<div class="tw-icon">' + ty.icon + '</div>' +
       '<div class="tw-name">' + ty.name + '</div>' +
-      '<div class="tw-cost">$' + ty.cost + '</div>' +
-      '<div class="tw-desc">' + ty.desc + '</div>';
+      '<div class="tw-cost">$' + ty.cost + '</div>';
     card.addEventListener('click', () => {
       closeUpgradePanel();
       if (state.placing === i) { setPlacing(null); return; }
@@ -1312,8 +1312,7 @@ function updateHUD() {
   $('moneyVal').textContent = '$' + Math.floor(state.money).toLocaleString();
   $('livesVal').textContent = state.lives;
   $('waveVal').textContent = state.level + ' / ' + TOTAL_WAVES;
-  $('scoreVal').textContent = state.score.toLocaleString();
-  document.querySelector('.lives-block').classList.toggle('danger', state.lives <= 5);
+  document.querySelector('.lives-stat').classList.toggle('danger', state.lives <= 5);
   const wb = $('waveBtn');
   wb.classList.toggle('running', state.phase === 'wave');
   wb.textContent = state.phase === 'wave' ? '⚔ WAVE ' + state.level : '▶ START WAVE ' + state.level;
@@ -1680,13 +1679,15 @@ function drawPath(map) {
   }
 }
 
+// The base at path's end — Earth, facing the Western Hemisphere, ringed by
+// the defense shield the player is protecting it with.
 function drawBase(map) {
   const p = pathPoint(map, map.totalLen - 0.9);
   const t = performance.now() / 1000;
   const r = cell * (0.55 + Math.sin(t * 2.4) * 0.05);
   const x = px(p.x), y = py(p.y);
   ctx.save();
-  // pulsing shield rings — the mothership you're defending
+  // pulsing defense-shield rings
   for (let i = 3; i >= 1; i--) {
     ctx.beginPath();
     ctx.arc(x, y, r * (0.5 + i * 0.28), 0, Math.PI * 2);
@@ -1694,34 +1695,116 @@ function drawBase(map) {
     ctx.lineWidth = 2;
     ctx.stroke();
   }
+  // ocean sphere
+  const globeR = r * 0.72;
   ctx.shadowColor = '#5dffb0';
-  ctx.shadowBlur = 20;
-  ctx.fillStyle = '#0d2b22';
+  ctx.shadowBlur = 16;
   ctx.beginPath();
-  ctx.ellipse(x, y, r * 0.75, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.arc(x, y, globeR, 0, Math.PI * 2);
+  ctx.fillStyle = '#1f5fae';
   ctx.fill();
+  ctx.shadowBlur = 0;
+  // continents + clouds, clipped to the globe
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, globeR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = '#3ba55c';
+  // North America
+  ctx.beginPath();
+  ctx.moveTo(x - globeR * 0.5, y - globeR * 0.55);
+  ctx.lineTo(x + globeR * 0.15, y - globeR * 0.62);
+  ctx.lineTo(x + globeR * 0.3, y - globeR * 0.3);
+  ctx.lineTo(x - globeR * 0.05, y - globeR * 0.05);
+  ctx.lineTo(x - globeR * 0.3, y - globeR * 0.1);
+  ctx.closePath();
+  ctx.fill();
+  // South America — kept visibly separate from North America by a thin
+  // strait of ocean, so the two read as distinct landmasses at a glance
+  ctx.beginPath();
+  ctx.moveTo(x - globeR * 0.08, y + globeR * 0.12);
+  ctx.lineTo(x + globeR * 0.06, y + globeR * 0.16);
+  ctx.lineTo(x + globeR * 0.12, y + globeR * 0.38);
+  ctx.lineTo(x - globeR * 0.05, y + globeR * 0.65);
+  ctx.lineTo(x - globeR * 0.18, y + globeR * 0.42);
+  ctx.lineTo(x - globeR * 0.1, y + globeR * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath(); ctx.ellipse(x + globeR * 0.35, y - globeR * 0.3, globeR * 0.22, globeR * 0.08, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x - globeR * 0.35, y + globeR * 0.25, globeR * 0.18, globeR * 0.07, -0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(x, y, globeR, 0, Math.PI * 2);
   ctx.strokeStyle = '#5dffb0';
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(x, y - r * 0.18, r * 0.3, Math.PI, 0);
-  ctx.fillStyle = 'rgba(93,255,176,0.5)';
-  ctx.fill();
   ctx.restore();
 }
 
+// The spawn point — an alien mothership hovering just off the lane,
+// dispatching ships down a tractor beam onto the path.
 function drawPortal(map) {
   const p = pathPoint(map, 0.6);
   const t = performance.now() / 1000;
   const x = px(p.x), y = py(p.y);
+  const hover = cell * 0.65;
+  const sx = x, sy = y - hover;
+  const bodyRx = cell * 0.8, bodyRy = cell * 0.3;
   ctx.save();
+
+  // tractor beam down to the spawn point
+  const beamW = bodyRx * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(sx - beamW, sy + bodyRy * 0.5);
+  ctx.lineTo(sx + beamW, sy + bodyRy * 0.5);
+  ctx.lineTo(x + cell * 0.14, y);
+  ctx.lineTo(x - cell * 0.14, y);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255, 78, 203, ' + (0.22 + Math.sin(t * 4) * 0.06) + ')';
+  ctx.fill();
+
+  // saucer body — a lighter fill so the disc itself reads clearly instead
+  // of dissolving into its own glow against the dark backdrop
   ctx.shadowColor = '#ff4ecb';
-  ctx.shadowBlur = 16;
+  ctx.shadowBlur = 9;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, bodyRx, bodyRy, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#4a3768';
+  ctx.fill();
+  ctx.strokeStyle = '#ff4ecb';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // cockpit dome, overlapping the body so it reads as one integrated hull
+  ctx.beginPath();
+  ctx.ellipse(sx, sy - bodyRy * 0.45, bodyRx * 0.34, bodyRy * 0.75, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,140,225,0.8)';
+  ctx.fill();
+  ctx.strokeStyle = '#ff4ecb';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // rim lights
+  ctx.shadowBlur = 8;
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const lx = sx + Math.cos(a) * bodyRx * 0.85;
+    const ly = sy + Math.sin(a) * bodyRy * 0.85;
+    const glow = 0.55 + Math.sin(t * 3 + i) * 0.35;
+    ctx.beginPath();
+    ctx.arc(lx, ly, cell * 0.045, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,210,245,' + glow + ')';
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // spawn glow at the actual path point, where ships fade in
   for (let i = 0; i < 2; i++) {
     ctx.beginPath();
-    ctx.arc(x, y, cell * (0.32 + i * 0.14 + Math.sin(t * 3 + i) * 0.04), 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 78, 203, ' + (0.7 - i * 0.3) + ')';
-    ctx.lineWidth = 3 - i;
+    ctx.arc(x, y, cell * (0.22 + i * 0.1 + Math.sin(t * 3 + i) * 0.03), 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 78, 203, ' + (0.6 - i * 0.25) + ')';
+    ctx.lineWidth = 2;
     ctx.stroke();
   }
   ctx.restore();

@@ -198,7 +198,7 @@ canvas {
 .track-select { margin: 2px 0 10px; }
 .track-select .tab-btn { padding: 6px 14px; font-size: 0.74rem; }
 
-/* ============ LEFT RAIL (Space Bucks) ============ */
+/* ============ LEFT RAIL (Space Bucks / Shields / Wave) ============ */
 #leftRail {
   position: fixed;
   top: 0; left: 0; bottom: 0;
@@ -207,6 +207,7 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 8px;
   padding-top: 14px;
   background: linear-gradient(to right, rgba(4,5,20,0.92) 0%, rgba(4,5,20,0.6) 75%, rgba(4,5,20,0) 100%);
 }
@@ -215,7 +216,7 @@ canvas {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255, 231, 75, 0.5);
   border-radius: 14px;
-  padding: 10px 6px;
+  padding: 8px 6px;
   width: 84%;
   text-align: center;
   backdrop-filter: blur(3px);
@@ -228,83 +229,61 @@ canvas {
   line-height: 1.3;
 }
 .rail-value {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: var(--neon-yellow);
   text-shadow: 0 0 10px rgba(255,231,75,0.7);
   margin-top: 4px;
   word-break: break-word;
 }
-
-/* ============ TOP HUD ============ */
-#topbar {
-  position: fixed;
-  top: 0; left: var(--rail-w); right: var(--rail-w);
-  z-index: 10;
-  padding: 6px 10px;
-  display: flex;
-  gap: 7px;
-  align-items: stretch;
-  justify-content: center;
-  flex-wrap: wrap;
-  background: linear-gradient(to bottom, rgba(4,5,20,0.88) 0%, rgba(4,5,20,0.6) 55%, rgba(4,5,20,0) 100%);
-}
-#topbar.hidden { display: none; }
-
-.hud-block {
-  background: rgba(8, 12, 34, 0.72);
-  border: 1px solid rgba(75, 245, 255, 0.35);
-  border-radius: 10px;
-  padding: 5px 10px;
-  min-width: 66px;
-  text-align: center;
-  backdrop-filter: blur(3px);
-}
-.hud-label {
-  font-size: 0.6rem;
-  letter-spacing: 1.5px;
-  color: #7fa6d6;
-  font-weight: 700;
-}
-.hud-value {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--neon-cyan);
-  text-shadow: 0 0 10px rgba(75,245,255,0.6);
-}
-.lives-block .hud-value { color: var(--neon-green); text-shadow: 0 0 10px rgba(93,255,176,0.7); }
-.lives-block.danger .hud-value {
+.rail-stat.lives-stat { border-color: rgba(93, 255, 176, 0.5); }
+.rail-stat.lives-stat .rail-value { color: var(--neon-green); text-shadow: 0 0 10px rgba(93,255,176,0.7); }
+.rail-stat.lives-stat.danger .rail-value {
   color: var(--neon-red);
   text-shadow: 0 0 14px var(--neon-red);
   animation: pulse 0.5s infinite alternate;
 }
+.rail-stat.wave-stat { border-color: rgba(75, 245, 255, 0.5); }
+.rail-stat.wave-stat .rail-value { color: var(--neon-cyan); text-shadow: 0 0 10px rgba(75,245,255,0.6); font-size: 1rem; }
 @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
 
+/* ============ TOP-RIGHT CORNER CONTROLS ============ */
+#topbar {
+  position: fixed;
+  top: 8px; right: calc(var(--rail-w) + 8px);
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+}
+#topbar.hidden { display: none; }
+
+/* Start Wave — floats bottom-center over the board, not part of the flow */
 .wave-btn {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
   background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));
   border: none;
   color: #04081a;
   font-weight: 800;
-  font-size: 0.9rem;
-  letter-spacing: 0.5px;
-  padding: 0 14px;
-  border-radius: 10px;
+  font-size: 0.78rem;
+  letter-spacing: 0.4px;
+  padding: 8px 16px;
+  border-radius: 999px;
   cursor: pointer;
-  box-shadow: 0 0 20px rgba(93, 255, 176, 0.45);
+  box-shadow: 0 0 14px rgba(93, 255, 176, 0.4);
   transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s;
   font-family: inherit;
-  animation: pulse 0.8s infinite alternate;
 }
-.wave-btn:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(93, 255, 176, 0.7); }
+.wave-btn:hover { transform: translateX(-50%) translateY(-1px); box-shadow: 0 0 20px rgba(93, 255, 176, 0.65); }
 .wave-btn.running {
-  animation: none;
   opacity: 0.35;
   cursor: default;
   box-shadow: none;
-  transform: none;
 }
 
-.topbar-right { display: flex; gap: 6px; margin-left: auto; }
 .hud-btn {
   background: rgba(8, 12, 34, 0.72);
   border: 1px solid rgba(255,255,255,0.25);
@@ -326,9 +305,10 @@ canvas {
 }
 .hud-btn.off { opacity: 0.4; }
 
-/* ============ WAVE PREVIEW ============ */
+/* ============ WAVE PREVIEW (top middle) ============ */
 #wavePreview {
   position: fixed;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 9;
@@ -379,6 +359,7 @@ canvas {
 }
 #intelCard {
   position: fixed;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 16;
@@ -419,8 +400,8 @@ canvas {
 .tower-card {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255,255,255,0.15);
-  border-radius: 12px;
-  padding: 6px 4px 5px;
+  border-radius: 10px;
+  padding: 4px 4px 3px;
   width: 100%;
   text-align: center;
   cursor: pointer;
@@ -435,10 +416,9 @@ canvas {
   background: rgba(20, 26, 60, 0.9);
 }
 .tower-card.broke { opacity: 0.38; }
-.tower-card .tw-icon { font-size: 1.3rem; line-height: 1.2; filter: drop-shadow(0 0 6px var(--tc, var(--neon-cyan))); }
-.tower-card .tw-name { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.3px; color: #dceaff; margin-top: 1px; }
-.tower-card .tw-cost { font-size: 0.76rem; font-weight: 800; color: var(--neon-yellow); }
-.tower-card .tw-desc { font-size: 0.53rem; color: #8fa8cc; margin-top: 1px; line-height: 1.2; }
+.tower-card .tw-icon { font-size: 1.2rem; line-height: 1.1; filter: drop-shadow(0 0 6px var(--tc, var(--neon-cyan))); }
+.tower-card .tw-name { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.2px; color: #dceaff; margin-top: 1px; }
+.tower-card .tw-cost { font-size: 0.7rem; font-weight: 800; color: var(--neon-yellow); }
 
 /* ============ UPGRADE PANEL (swaps into the right rail) ============ */
 .upgrade-panel {
@@ -544,11 +524,10 @@ canvas {
   .title { font-size: 2.1rem; }
   .checkpoint-select { flex-wrap: wrap; }
   .cp-card { flex: 1 1 30%; }
-  .hud-block { min-width: 56px; padding: 4px 6px; }
-  .hud-value { font-size: 0.95rem; }
-  .wave-btn { padding: 0 12px; font-size: 0.78rem; }
-  .hud-btn { padding: 4px 8px; font-size: 0.72rem; }
+  .hud-btn { padding: 4px 7px; font-size: 0.72rem; }
   .rail-value { font-size: 1rem; }
+  .rail-stat.wave-stat .rail-value { font-size: 0.9rem; }
+  .wave-btn { padding: 7px 12px; font-size: 0.72rem; }
   .wp-chip { padding: 2px 7px; font-size: 0.66rem; }
   .wp-label { display: none; }
 }
