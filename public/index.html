@@ -43,7 +43,7 @@
     <div class="howto">
       <strong>How to play:</strong> Alien ships fly the glowing lane toward your mothership.
       Pick a turret from the bar below, tap an open tile to build it, then press
-      <strong>START WAVE</strong>. Kills earn credits — spend them on more turrets and upgrades.
+      <strong>START WAVE</strong>. Kills earn Space Bucks — spend them on more turrets and upgrades.
       Each map is 30 waves and your defense stays put the whole run; enemies grow relentlessly
       stronger, so upgrade your turrets (tap one you've built) or the late waves will walk
       through them. Survive wave 30 to clear the map and unlock the next.
@@ -52,12 +52,16 @@
   </div>
 </div>
 
+<!-- ============ LEFT RAIL: Space Bucks (in-game) ============ -->
+<div id="leftRail" class="hidden">
+  <div class="rail-stat money-stat">
+    <div class="rail-label">SPACE<br>BUCKS</div>
+    <div class="rail-value" id="moneyVal">$0</div>
+  </div>
+</div>
+
 <!-- ============ TOP HUD (in-game) ============ -->
 <div id="topbar" class="hidden">
-  <div class="hud-block money-block">
-    <div class="hud-label">CREDITS</div>
-    <div class="hud-value" id="moneyVal">$0</div>
-  </div>
   <div class="hud-block lives-block">
     <div class="hud-label">SHIELDS</div>
     <div class="hud-value" id="livesVal">20</div>
@@ -73,9 +77,7 @@
   <button id="waveBtn" class="wave-btn">▶ START WAVE</button>
   <div class="topbar-right">
     <button id="speedBtn" class="hud-btn" title="Game speed">1×</button>
-    <button id="autoBtn" class="hud-btn" title="Auto-start next wave">AUTO: OFF</button>
-    <button id="sfxBtnGame" class="hud-btn" title="Sound effects on/off">🔊</button>
-    <button id="musicBtnGame" class="hud-btn" title="Music on/off">🎵</button>
+    <button id="autoBtn" class="hud-btn" title="Auto-start next wave">AUTO</button>
     <button id="pauseBtn" class="hud-btn" title="Pause">⏸</button>
   </div>
 </div>
@@ -87,7 +89,7 @@
 </div>
 <div id="intelCard" class="hidden"></div>
 
-<!-- ============ SHOP BAR (in-game) ============ -->
+<!-- ============ RIGHT RAIL: tower shop (in-game) ============ -->
 <div id="shop" class="hidden">
   <div id="towerCards" class="tower-cards"><!-- injected by game.js --></div>
 
@@ -109,6 +111,10 @@
 <div id="pauseOverlay" class="screen hidden">
   <div class="menu-panel small">
     <h2>PAUSED</h2>
+    <div class="menu-footer-row pause-audio-row">
+      <button id="sfxBtnPause" class="ghost-btn">🔊 Sound On</button>
+      <button id="musicBtnPause" class="ghost-btn">🎵 Music On</button>
+    </div>
     <button id="resumeBtn" class="primary-btn">RESUME ▶</button>
     <button id="quitBtn" class="ghost-btn">Quit to Menu</button>
   </div>
@@ -122,7 +128,7 @@
       <div class="result-row"><span>Waves Survived</span><strong id="finalWave">0</strong></div>
       <div class="result-row"><span>Final Score</span><strong id="finalScore">0</strong></div>
       <div class="result-row"><span>Ships Destroyed</span><strong id="finalKills">0</strong></div>
-      <div class="result-row"><span>Credits Earned</span><strong id="finalEarned">$0</strong></div>
+      <div class="result-row"><span>Space Bucks Earned</span><strong id="finalEarned">$0</strong></div>
     </div>
     <div id="newRecord" class="new-record hidden">🏆 NEW BEST!</div>
     <button id="retryBtn" class="primary-btn">DEFEND AGAIN ▶</button>

@@ -33,13 +33,19 @@ function resize() {
   bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  // HUD lives in side rails (money/shop) plus a slim top strip between them,
+  // so the board gets the full height minus just the top strip — this is
+  // what makes the grid readable on a landscape phone (see CLAUDE.md notes
+  // on this layout if you're ever tempted to move chrome back to the bottom).
   const topbar = document.getElementById('topbar');
+  const leftRail = document.getElementById('leftRail');
   const shop = document.getElementById('shop');
-  const topH = (!topbar.classList.contains('hidden') && topbar.offsetHeight) || 58;
-  const shopH = (!shop.classList.contains('hidden') && shop.offsetHeight) || 112;
-  cell = Math.min((W - 12) / COLS, (H - topH - shopH - 10) / ROWS);
-  boardX = (W - cell * COLS) / 2;
-  boardY = topH + (H - topH - shopH - cell * ROWS) / 2;
+  const topH = (!topbar.classList.contains('hidden') && topbar.offsetHeight) || 54;
+  const leftW = (!leftRail.classList.contains('hidden') && leftRail.offsetWidth) || 108;
+  const rightW = (!shop.classList.contains('hidden') && shop.offsetWidth) || 108;
+  cell = Math.min((W - leftW - rightW - 12) / COLS, (H - topH - 10) / ROWS);
+  boardX = leftW + (W - leftW - rightW - cell * COLS) / 2;
+  boardY = topH + (H - topH - cell * ROWS) / 2;
 }
 window.addEventListener('resize', () => { resize(); initStars(); updateWavePreview(); });
 
@@ -257,7 +263,8 @@ const Sound = (() => {
 })();
 
 /* ======================================================================
-   STARFIELD BACKGROUND
+   STARFIELD BACKGROUND — twinkling star layers plus a few fixed deep-space
+   set pieces (planet, distant galaxy) and occasional passing comets.
    ====================================================================== */
 let stars = [];
 function initStars() {
@@ -281,6 +288,141 @@ function initStars() {
   });
 }
 
+// Planet + rings: fixed at a corner of the viewport — at this "distance"
+// there's no perceptible drift over a play session, so it doesn't scroll
+// with the stars (avoids a single unique object popping/teleporting on wrap).
+function drawPlanet() {
+  const r = Math.min(W, H) * 0.09;
+  const cx = W * 0.87, cy = H * 0.16;
+  const tilt = -0.34;
+  const ringRx = r * 2.05, ringRy = r * 0.52;
+
+  bgCtx.save();
+  bgCtx.translate(cx, cy);
+  bgCtx.rotate(tilt);
+  // back half of the rings, behind the planet body
+  bgCtx.strokeStyle = 'rgba(190, 210, 255, 0.32)';
+  bgCtx.lineWidth = r * 0.13;
+  bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx, ringRy, 0, Math.PI, Math.PI * 2); bgCtx.stroke();
+  bgCtx.strokeStyle = 'rgba(255, 224, 190, 0.22)';
+  bgCtx.lineWidth = r * 0.05;
+  bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx * 0.8, ringRy * 0.8, 0, Math.PI, Math.PI * 2); bgCtx.stroke();
+  bgCtx.restore();
+
+  // planet body — flat fill with a clipped darker crescent for a terminator
+  bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2);
+  bgCtx.fillStyle = '#5d7ea8';
+  bgCtx.fill();
+  bgCtx.save();
+  bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.clip();
+  bgCtx.beginPath(); bgCtx.arc(cx + r * 0.55, cy - r * 0.35, r * 1.05, 0, Math.PI * 2);
+  bgCtx.fillStyle = 'rgba(18, 24, 54, 0.55)';
+  bgCtx.fill();
+  bgCtx.strokeStyle = 'rgba(255,255,255,0.07)';
+  bgCtx.lineWidth = r * 0.09;
+  for (let i = -1; i <= 1; i++) {
+    bgCtx.beginPath(); bgCtx.ellipse(cx, cy + i * r * 0.5, r * 1.1, r * 0.2, 0.12, 0, Math.PI * 2); bgCtx.stroke();
+  }
+  bgCtx.restore();
+
+  bgCtx.save();
+  bgCtx.translate(cx, cy);
+  bgCtx.rotate(tilt);
+  // front half of the rings, over the planet body
+  bgCtx.strokeStyle = 'rgba(190, 210, 255, 0.45)';
+  bgCtx.lineWidth = r * 0.13;
+  bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx, ringRy, 0, 0, Math.PI); bgCtx.stroke();
+  bgCtx.strokeStyle = 'rgba(255, 224, 190, 0.35)';
+  bgCtx.lineWidth = r * 0.05;
+  bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx * 0.8, ringRy * 0.8, 0, 0, Math.PI); bgCtx.stroke();
+  bgCtx.restore();
+}
+
+// Distant spiral galaxy — a soft glow core with a couple of faint tilted
+// arm smudges. Also fixed in place, same reasoning as the planet.
+function drawGalaxy() {
+  const cx = W * 0.13, cy = H * 0.74;
+  const r = Math.min(W, H) * 0.24;
+  const g = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, 'rgba(255, 228, 205, 0.5)');
+  g.addColorStop(0.15, 'rgba(200, 165, 255, 0.3)');
+  g.addColorStop(0.5, 'rgba(120, 95, 200, 0.12)');
+  g.addColorStop(1, 'rgba(80, 60, 160, 0)');
+  bgCtx.fillStyle = g;
+  bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.fill();
+
+  bgCtx.save();
+  bgCtx.translate(cx, cy);
+  [0.4, -0.55].forEach((rot) => {
+    bgCtx.rotate(rot);
+    bgCtx.beginPath();
+    bgCtx.ellipse(r * 0.15, 0, r * 0.85, r * 0.2, 0, 0, Math.PI * 2);
+    bgCtx.fillStyle = 'rgba(190, 160, 255, 0.06)';
+    bgCtx.fill();
+    bgCtx.rotate(-rot);
+  });
+  bgCtx.restore();
+
+  bgCtx.beginPath(); bgCtx.arc(cx, cy, r * 0.07, 0, Math.PI * 2);
+  bgCtx.fillStyle = 'rgba(255, 242, 224, 0.85)';
+  bgCtx.shadowColor = 'rgba(255, 222, 190, 0.8)';
+  bgCtx.shadowBlur = r * 0.22;
+  bgCtx.fill();
+  bgCtx.shadowBlur = 0;
+}
+
+// Comets: small, occasional, streak-and-fade — spawned on a random timer.
+let comets = [];
+let cometClock = 0, nextCometAt = 5 + Math.random() * 8;
+function updateComets(dt) {
+  cometClock += dt;
+  if (cometClock >= nextCometAt) {
+    cometClock = 0;
+    nextCometAt = 8 + Math.random() * 14;
+    const fromLeft = Math.random() < 0.5;
+    const speed = 240 + Math.random() * 140;
+    const angle = 0.3 + Math.random() * 0.25;
+    comets.push({
+      x: fromLeft ? -20 : W + 20,
+      y: Math.random() * H * 0.55,
+      vx: (fromLeft ? 1 : -1) * Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      trail: [],
+    });
+  }
+  for (const c of comets) {
+    c.trail.unshift({ x: c.x, y: c.y });
+    if (c.trail.length > 9) c.trail.pop();
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.life -= dt * 0.3;
+  }
+  comets = comets.filter((c) => c.life > 0 && c.x > -60 && c.x < W + 60 && c.y < H + 60);
+}
+function drawComets() {
+  for (const c of comets) {
+    for (let i = c.trail.length - 1; i >= 0; i--) {
+      const p = c.trail[i];
+      const k = 1 - i / c.trail.length;
+      bgCtx.globalAlpha = k * c.life * 0.55;
+      bgCtx.beginPath();
+      bgCtx.arc(p.x, p.y, 1.8 * k + 0.3, 0, Math.PI * 2);
+      bgCtx.fillStyle = '#cdeeff';
+      bgCtx.fill();
+    }
+    bgCtx.globalAlpha = c.life;
+    bgCtx.shadowColor = '#bfe8ff';
+    bgCtx.shadowBlur = 9;
+    bgCtx.beginPath();
+    bgCtx.arc(c.x, c.y, 2.4, 0, Math.PI * 2);
+    bgCtx.fillStyle = '#eaffff';
+    bgCtx.fill();
+    bgCtx.shadowBlur = 0;
+  }
+  bgCtx.globalAlpha = 1;
+}
+
 function drawStarfield(dt) {
   bgCtx.clearRect(0, 0, W, H);
   const grad = bgCtx.createLinearGradient(0, 0, 0, H);
@@ -289,6 +431,8 @@ function drawStarfield(dt) {
   grad.addColorStop(1, '#0c0e33');
   bgCtx.fillStyle = grad;
   bgCtx.fillRect(0, 0, W, H);
+  drawGalaxy();
+  drawPlanet();
   for (const s of stars) {
     s.y += s.speed * dt;
     if (s.y > H) { s.y = -4; s.x = Math.random() * W; }
@@ -301,6 +445,8 @@ function drawStarfield(dt) {
     bgCtx.fill();
   }
   bgCtx.globalAlpha = 1;
+  updateComets(dt);
+  drawComets();
 }
 
 /* ======================================================================
@@ -424,8 +570,8 @@ const ENEMY_TYPES = {
              trait: 'Quick, fragile line ship.' },
   raider:  { name: 'Raider',  icon: '▶', hp: 60,   speed: 1.6, reward: 7,  leak: 1,  radius: 0.3,  color: '#ff4ecb', shape: 'dart', debutMap: 0, debutWave: 2,
              trait: 'Tougher assault ship.' },
-  brute:   { name: 'Brute',   icon: '⬢', hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff5566', shape: 'hex', debutMap: 0, debutWave: 5,
-             trait: 'Slow heavy hull — costs 2 shields if it gets through.' },
+  brute:   { name: 'Brute',   icon: '⬢', hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff8c3c', shape: 'hex', fireShield: true, debutMap: 0, debutWave: 5,
+             trait: 'Wrapped in a fire shield that cuts all other damage by 75% — only Frost\'s chill can extinguish it.' },
   swarm:   { name: 'Swarmer', icon: '▴', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri', debutMap: 0, debutWave: 6, announce: true,
              trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
   shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'diamond', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
@@ -450,7 +596,7 @@ const MAP_MULT = [1, 1.25, 1.55, 1.8, 2.1];
 const MAP_START_MONEY = [220, 280, 340, 410, 480];
 function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * MAP_MULT[state.mapIndex]; }
 function speedMult(w) { return 1 + 0.005 * w; }
-function rewardMult(w) { return 1 + 0.04 * w; }
+function rewardMult(w) { return 1 + 0.03 * w; }
 
 // Deterministic per-wave RNG — wave N is always the same wave N, so the
 // build-phase preview matches what actually spawns and retries are fair.
@@ -612,7 +758,7 @@ function currentMap() { return MAPS[state.mapIndex]; }
    DOM REFS
    ====================================================================== */
 const $ = (id) => document.getElementById(id);
-const menuEl = $('menu'), topbarEl = $('topbar'), shopEl = $('shop'),
+const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), shopEl = $('shop'),
   bannerEl = $('banner'), pauseEl = $('pauseOverlay'), overEl = $('gameOver'),
   towerCardsEl = $('towerCards'), upPanelEl = $('upgradePanel');
 
@@ -633,6 +779,7 @@ function spawnEnemy(type) {
     slowUntil: 0, slowPct: 0,
     shieldHits, shieldHitsMax: shieldHits, shieldRegen: 0,
     armor: def.armor ? def.armor * (1 + 0.06 * lvl) : 0,
+    fireShield: !!def.fireShield,
     healPulse: 0,
     lastHit: -99,
     x: 0, y: 0, angle: 0,
@@ -646,7 +793,7 @@ function spawnEnemy(type) {
   if (type === 'boss') { Sound.boss(); showBanner('⚠ DREADNOUGHT INBOUND ⚠', ENEMY_TYPES.boss.name); }
 }
 
-function damageEnemy(e, dmg, color) {
+function damageEnemy(e, dmg, color, fromFrost = false) {
   if (e.dead) return;
   e.lastHit = state.waveTime;
   // Warden shield: each charge eats one full hit, regardless of damage.
@@ -666,6 +813,17 @@ function damageEnemy(e, dmg, color) {
         addFloat(e.x, e.y, 'DEFLECTED', '#8fa8ff');
       }
       return;
+    }
+  }
+  // Brute fire shield: cuts non-Frost damage by 75%. A Frost hit
+  // extinguishes it for good (and still deals its own damage in full).
+  if (e.fireShield) {
+    if (fromFrost) {
+      e.fireShield = false;
+      addFloat(e.x, e.y, 'EXTINGUISHED', '#9fd8ff');
+      fx.push({ kind: 'ring', x: e.x, y: e.y, life: 0.2, maxLife: 0.22, r: e.def.radius * 1.8, color: '#9fd8ff' });
+    } else {
+      dmg *= 0.25;
     }
   }
   e.hp -= dmg;
@@ -712,10 +870,23 @@ function fireTower(t, st, target) {
       bolts.push({ x: t.x, y: t.y, target, speed: 14, dmg: st.dmg, color: ty.color, r: 0.06 });
       Sound.shotGatling();
       break;
-    case 'frost':
-      bolts.push({ x: t.x, y: t.y, target, speed: 10, dmg: st.dmg, color: ty.color, r: 0.09, slowPct: st.slowPct, slowDur: st.slowDur });
+    case 'frost': {
+      // aura pulse: no projectile — every enemy currently in range (cloaked
+      // ones included) is slowed and drained at once, at the same per-tick
+      // dmg/rate as a single-target shot would have been
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - t.x, e.y - t.y) > st.range) continue;
+        damageEnemy(e, st.dmg, ty.color, true);
+        if (!e.dead) {
+          e.slowPct = Math.max(e.slowPct * (state.waveTime < e.slowUntil ? 1 : 0), st.slowPct);
+          e.slowUntil = state.waveTime + st.slowDur;
+        }
+      }
+      fx.push({ kind: 'ring', x: t.x, y: t.y, life: 0.3, maxLife: 0.3, r: st.range, color: ty.color });
       Sound.shotFrost();
       break;
+    }
     case 'mortar': {
       // Lead the target: aim where it will be when the shell lands.
       const flight = 0.5;
@@ -796,7 +967,7 @@ function startWave() {
 }
 
 function waveComplete() {
-  const bonus = 60 + state.level * 10;
+  const bonus = 50 + state.level * 8;
   state.money += bonus;
   state.earned += bonus;
   state.score += bonus * 5;
@@ -866,6 +1037,7 @@ function endGame(victory) {
   $('restartBtn').classList.toggle('hidden', !(!victory && cp));
 
   topbarEl.classList.add('hidden');
+  leftRailEl.classList.add('hidden');
   shopEl.classList.add('hidden');
   overEl.classList.remove('hidden');
   updateWavePreview();
@@ -1230,6 +1402,7 @@ function startGame(mapIdx) {
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
   topbarEl.classList.remove('hidden');
+  leftRailEl.classList.remove('hidden');
   shopEl.classList.remove('hidden');
   closeUpgradePanel();
   resize();
@@ -1246,6 +1419,7 @@ function goToMenu() {
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
   topbarEl.classList.add('hidden');
+  leftRailEl.classList.add('hidden');
   shopEl.classList.add('hidden');
   buildMapCards();
   updateWavePreview();
@@ -1290,26 +1464,25 @@ $('speedBtn').addEventListener('click', () => {
 
 $('autoBtn').addEventListener('click', () => {
   state.auto = !state.auto;
-  $('autoBtn').textContent = 'AUTO: ' + (state.auto ? 'ON' : 'OFF');
+  $('autoBtn').textContent = 'AUTO'; // on/off is shown by the .on glow, not text
   $('autoBtn').classList.toggle('on', state.auto);
 });
 
-// Sound/music toggles exist in two places (menu + in-game HUD); keep all
-// four buttons showing the same state.
+// Sound/music toggles exist in two places (main menu + in-game pause menu);
+// keep all four buttons showing the same state.
 function refreshAudioButtons() {
   const s = Sound.isEnabled(), m = Sound.isMusicEnabled();
   $('muteBtn').textContent = s ? '🔊 Sound On' : '🔇 Sound Off';
   $('musicBtn').textContent = m ? '🎵 Music On' : '🎵 Music Off';
-  $('sfxBtnGame').textContent = s ? '🔊' : '🔇';
-  $('sfxBtnGame').classList.toggle('off', !s);
-  $('musicBtnGame').classList.toggle('off', !m);
+  $('sfxBtnPause').textContent = s ? '🔊 Sound On' : '🔇 Sound Off';
+  $('musicBtnPause').textContent = m ? '🎵 Music On' : '🎵 Music Off';
 }
 function toggleSfx() { Sound.setEnabled(!Sound.isEnabled()); refreshAudioButtons(); }
 function toggleMusic() { Sound.setMusicEnabled(!Sound.isMusicEnabled()); refreshAudioButtons(); }
 $('muteBtn').addEventListener('click', toggleSfx);
 $('musicBtn').addEventListener('click', toggleMusic);
-$('sfxBtnGame').addEventListener('click', toggleSfx);
-$('musicBtnGame').addEventListener('click', toggleMusic);
+$('sfxBtnPause').addEventListener('click', toggleSfx);
+$('musicBtnPause').addEventListener('click', toggleMusic);
 refreshAudioButtons();
 
 const trackSelectEl = $('trackSelect');
@@ -1474,7 +1647,7 @@ function drawPath(map) {
     ctx.moveTo(px(map.pts[0].x), py(map.pts[0].y));
     for (let i = 1; i < map.pts.length; i++) ctx.lineTo(px(map.pts[i].x), py(map.pts[i].y));
   };
-  // outer glow edge
+  // outer containment-field glow
   path();
   ctx.strokeStyle = 'rgba(75, 245, 255, 0.28)';
   ctx.lineWidth = cell * 0.92;
@@ -1482,19 +1655,29 @@ function drawPath(map) {
   ctx.shadowBlur = 14;
   ctx.stroke();
   ctx.shadowBlur = 0;
-  // dark lane
+  // void trench fill
   path();
-  ctx.strokeStyle = 'rgba(8, 14, 44, 0.92)';
+  ctx.strokeStyle = 'rgba(7, 9, 30, 0.94)';
   ctx.lineWidth = cell * 0.8;
   ctx.stroke();
-  // marching direction dashes
-  path();
-  ctx.strokeStyle = 'rgba(75, 245, 255, 0.35)';
+  // flowing energy chevrons — a lane, not a road with lane-marking dashes
+  const spacing = cell * 0.62;
+  const phase = (performance.now() / 380) % spacing;
+  const halfW = cell * 0.13, tip = cell * 0.17;
+  ctx.strokeStyle = 'rgba(75, 245, 255, 0.55)';
   ctx.lineWidth = 2;
-  ctx.setLineDash([cell * 0.28, cell * 0.5]);
-  ctx.lineDashOffset = -performance.now() / 24;
-  ctx.stroke();
-  ctx.setLineDash([]);
+  for (let s = phase; s < map.totalLen; s += spacing) {
+    const p = pathPoint(map, s);
+    ctx.save();
+    ctx.translate(px(p.x), py(p.y));
+    ctx.rotate(p.angle);
+    ctx.beginPath();
+    ctx.moveTo(-tip, -halfW);
+    ctx.lineTo(tip * 0.4, 0);
+    ctx.lineTo(-tip, halfW);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawBase(map) {
@@ -1597,10 +1780,11 @@ function drawTower(t) {
   switch (ty.id) {
     case 'blaster':
       // compact blaster pistol: blocky body, short barrel, bright muzzle tip
+      // (kept inside the s*0.82 pad radius so it doesn't poke past the edge)
       roundRect(-s * 0.32, -s * 0.26, s * 0.5, s * 0.52, s * 0.1);
       ctx.fill();
-      ctx.fillRect(s * 0.1, -s * 0.11, s * 0.75, s * 0.22);
-      circle(s * 0.82, 0, s * 0.1, '#ffffff');
+      ctx.fillRect(s * 0.1, -s * 0.1, s * 0.6, s * 0.2);
+      circle(s * 0.72, 0, s * 0.08, '#ffffff');
       break;
     case 'frost':
       // snowflake: six-pointed star with an icy core
@@ -1641,14 +1825,31 @@ function drawTower(t) {
     case 'rail':
       // long pierce barrel, plus a small bullseye scope mounted above it —
       // kept clear of the barrel silhouette so it reads as a scope/reticle
-      // rather than a key (a ring beside or around the barrel reads as one)
-      ctx.fillRect(-s * 0.2, -s * 0.1, s * 1.15, s * 0.2);
-      ctx.fillRect(s * 0.55, -s * 0.18, s * 0.25, s * 0.36);
+      // rather than a key (a ring beside or around the barrel reads as one).
+      // Shortened to stay inside the s*0.82 pad radius.
+      ctx.fillRect(-s * 0.15, -s * 0.09, s * 0.85, s * 0.18);
+      ctx.fillRect(s * 0.55, -s * 0.16, s * 0.2, s * 0.32);
       ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color);
       circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff');
       break;
   }
   ctx.restore();
+
+  // frost is an aura, not an aimed gun — always show its reach so the
+  // player can see coverage without having to select each one
+  if (ty.id === 'frost') {
+    const rng = towerStats(t).range;
+    const pulse = 0.14 + Math.sin(performance.now() / 500 + t.col + t.row) * 0.05;
+    ctx.beginPath();
+    ctx.arc(x, y, rng * cell, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(159, 216, 255, 0.4)';
+    ctx.setLineDash([5, 7]);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(159, 216, 255, ' + pulse + ')';
+    ctx.fill();
+  }
 
   // level pips
   for (let i = 0; i < t.level; i++) {
@@ -1765,7 +1966,7 @@ function drawEnemy(e) {
   } else if (e.def.shape === 'hex') {
     ctx.rotate(e.angle);
     poly(6, r, e.def.color);
-    circle(0, 0, r * 0.4, '#3a0e18');
+    circle(0, 0, r * 0.4, '#3a1c0e');
   } else if (e.def.shape === 'pentagon') {
     ctx.rotate(e.angle);
     poly(5, r, e.def.color);
@@ -1828,6 +2029,16 @@ function drawEnemy(e) {
       ctx.arc(x, y + bob, r * 1.5, i * seg + seg * 0.12, (i + 1) * seg - seg * 0.12);
       ctx.stroke();
     }
+  }
+
+  // fire shield — pulsing ember ring, gone for good once Frost extinguishes it
+  if (e.fireShield) {
+    const pulse = 0.55 + Math.sin(performance.now() / 180 + e.wob) * 0.25;
+    ctx.beginPath();
+    ctx.arc(x, y + bob, r * 1.4, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 130, 40, ' + pulse + ')';
+    ctx.lineWidth = 3;
+    ctx.stroke();
   }
 
   // slow tint
