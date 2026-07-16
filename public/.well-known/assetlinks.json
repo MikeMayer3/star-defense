@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.allyourbase3.stardefense",
+      "sha256_cert_fingerprints": [
+        "83:B0:B9:56:1D:CF:7C:F4:AF:A2:66:45:00:96:F8:57:F6:23:55:1E:C7:A4:98:18:4B:A6:36:BD:50:24:5A:C6"
+      ]
+    }
+  }
+]
