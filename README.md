@@ -2,9 +2,9 @@
 
 A free neon tower-defense browser game. No build step, no dependencies, no accounts — one HTML file, one CSS file, one JS file.
 
-**Survive 50 waves across 5 sectors.** Alien ships fly a glowing lane toward your mothership; build turrets on open tiles to stop them. Kills earn credits to spend on more turrets and upgrades. Every 10th wave is a Dreadnought boss, and every cleared sector swaps in a new map (your turrets are recalled for a full refund).
+**Beat all 5 maps.** Each map is a 30-wave campaign level on a 22×13 grid: alien ships fly a glowing lane toward your mothership; build turrets on open tiles to stop them. Your defense persists the whole map — no resets — and enemies scale up relentlessly, so upgrading turrets (tap a built one) and buying the expensive types is the only way through the back half. Bosses hit at waves 10/20/30; auto-checkpoints after each boss mean a defeat resumes from wave 11 or 21 instead of scratch. Clearing a map unlocks the next.
 
-Waves are deterministic (wave N is always the same wave N) and composed of squadron blocks, and the build phase shows a preview of exactly what's coming — tap an enemy chip for its stats. Each sector debuts a new enemy that counters a lazy build: Wardens (wave 11+) carry shields that block the first hits outright (rapid fire strips them), Aegis cruisers (21+) deflect flat damage per hit (heavy shots punch through), Phantoms (31+) are cloaked until slowed (Frost sees through), and Menders (41+) heal nearby ships (pierce and chain reach them mid-pack). Every x7 wave is that sector's themed gimmick spike.
+Waves are deterministic (wave N of a map is always the same) and composed of squadron blocks, and the build phase shows a preview of exactly what's coming — tap an enemy chip for its stats. Each map debuts a new enemy that counters a lazy build: Wardens (map 1) carry shields that block the first hits outright (rapid fire strips them), Aegis cruisers (map 2) deflect flat damage per hit (heavy shots punch through), Phantoms (map 3) are cloaked until slowed (Frost sees through), and Menders (map 4) heal nearby ships (pierce and chain reach them mid-pack). Map 5 fields everything at once.
 
 ## The six turrets
 
@@ -17,7 +17,7 @@ Waves are deterministic (wave N is always the same wave N) and composed of squad
 | ⚡ Tesla Coil | $220 | Lightning that chains between ships |
 | 🎯 Rail Cannon | $320 | Long range, pierces everything in a line |
 
-Each turret upgrades twice (click a built turret), and sells back for 70% of what you put in. Checkpoints unlock every 10 waves so you don't have to replay from wave 1.
+Each turret upgrades twice (click a built turret), and sells back for 70% of what you put in.
 
 ## Structure
 

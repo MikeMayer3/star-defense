@@ -146,6 +146,7 @@ canvas {
   font-family: inherit;
 }
 .ghost-btn:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); }
+.ghost-btn.hidden { display: none; }
 
 .menu-footer {
   margin-top: 18px;

@@ -16,10 +16,10 @@
 <div id="menu" class="screen">
   <div class="menu-panel">
     <h1 class="title"><span class="t1">STAR</span><span class="t2">DEFENSE</span></h1>
-    <p class="subtitle">Build turrets. Hold the line. Survive all 50 waves.</p>
+    <p class="subtitle">Build turrets. Hold the line. Beat all 5 maps.</p>
 
-    <div class="checkpoint-select" id="checkpointSelect">
-      <!-- checkpoint cards injected by game.js -->
+    <div class="checkpoint-select" id="mapSelect">
+      <!-- map cards injected by game.js -->
     </div>
 
     <button id="startBtn" class="primary-btn">DEPLOY DEFENSES ▶</button>
@@ -41,8 +41,10 @@
       <strong>How to play:</strong> Alien ships fly the glowing lane toward your mothership.
       Pick a turret from the bar below, tap an open tile to build it, then press
       <strong>START WAVE</strong>. Kills earn credits — spend them on more turrets and upgrades.
-      Every 10 waves you clear a sector: the map changes and your turrets are recalled for a
-      full refund. Lose all 20 shields and the fleet breaks through.
+      Each map is 30 waves and your defense stays put the whole run; enemies grow relentlessly
+      stronger, so upgrade your turrets (tap one you've built) or the late waves will walk
+      through them. Survive wave 30 to clear the map and unlock the next.
+      Lose all 20 shields and the fleet breaks through.
     </div>
   </div>
 </div>
@@ -121,6 +123,7 @@
     </div>
     <div id="newRecord" class="new-record hidden">🏆 NEW BEST!</div>
     <button id="retryBtn" class="primary-btn">DEFEND AGAIN ▶</button>
+    <button id="restartBtn" class="ghost-btn hidden">Restart Map (fresh)</button>
     <button id="menuBtn" class="ghost-btn">Main Menu</button>
   </div>
 </div>

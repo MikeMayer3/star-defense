@@ -1,7 +1,7 @@
 'use strict';
 /* ======================================================================
    STAR DEFENSE — a neon tower defense game.
-   50 waves · 5 sectors (maps) · 6 tower types · credits economy.
+   5-map campaign · 30 waves each · 6 tower types · credits economy.
    No build step, no dependencies — one canvas game file.
    ====================================================================== */
 
@@ -18,7 +18,7 @@ const cv = document.getElementById('game');
 const bgCtx = bgCanvas.getContext('2d');
 const ctx = cv.getContext('2d');
 
-const COLS = 16, ROWS = 10;
+const COLS = 22, ROWS = 13;
 let W = 0, H = 0, dpr = 1;
 let cell = 40, boardX = 0, boardY = 0;
 
@@ -304,16 +304,17 @@ function drawStarfield(dt) {
 }
 
 /* ======================================================================
-   MAPS — one per sector (10 waves each). Waypoints are grid cells;
-   enemies travel between cell centers. Off-board waypoints (-1 / 16)
-   make ships fly in from and out past the board edge.
+   MAPS — one per campaign level (30 waves each, no resets: your build
+   lives from wave 1 to 30). Waypoints are grid cells; enemies travel
+   between cell centers. Off-board waypoints (-1 / 22) make ships fly in
+   from and out past the board edge.
    ====================================================================== */
 const MAPS = [
-  { name: 'Corridor',   wp: [[-1, 2], [12, 2], [12, 5], [3, 5], [3, 8], [16, 8]] },
-  { name: 'Serpent',    wp: [[-1, 5], [2, 5], [2, 1], [6, 1], [6, 8], [10, 8], [10, 1], [14, 1], [14, 5], [16, 5]] },
-  { name: 'Switchback', wp: [[-1, 1], [14, 1], [14, 8], [1, 8], [1, 3], [11, 3], [11, 6], [16, 6]] },
-  { name: 'Zigzag',     wp: [[-1, 8], [3, 8], [3, 2], [7, 2], [7, 7], [11, 7], [11, 2], [14, 2], [14, 8], [16, 8]] },
-  { name: 'Gauntlet',   wp: [[-1, 1], [13, 1], [13, 3], [2, 3], [2, 5], [13, 5], [13, 7], [2, 7], [-1, 7]] },
+  { name: 'Corridor',   wp: [[-1, 2], [17, 2], [17, 7], [4, 7], [4, 10], [22, 10]] },
+  { name: 'Serpent',    wp: [[-1, 6], [3, 6], [3, 1], [8, 1], [8, 11], [13, 11], [13, 1], [18, 1], [18, 11], [22, 11]] },
+  { name: 'Switchback', wp: [[-1, 1], [19, 1], [19, 4], [2, 4], [2, 7], [19, 7], [19, 10], [22, 10]] },
+  { name: 'Zigzag',     wp: [[-1, 11], [3, 11], [3, 2], [7, 2], [7, 9], [11, 9], [11, 2], [15, 2], [15, 9], [19, 9], [19, 2], [22, 2]] },
+  { name: 'Gauntlet',   wp: [[-1, 1], [20, 1], [20, 4], [2, 4], [2, 7], [20, 7], [20, 10], [22, 10]] },
 ];
 
 // Precompute per-map: waypoint centers (cell units), segment lengths, path cell set.
@@ -414,34 +415,42 @@ function towerStats(t) {
      rounds bounce off and heavy shots punch through.
    · cloak — Phantoms can't be targeted until slowed; Frost sees through.
    · heal — Menders repair nearby hulls; pierce/chain reach them mid-pack.
-   `intro` is the wave the type first appears (drives NEW tags + banners),
+   `debutMap`/`debutWave` mark where the type first appears (drives NEW
+   tags + banners); each map after the first debuts one new threat.
    `announce`d types get a NEW CONTACT banner explaining their trait.
    ====================================================================== */
 const ENEMY_TYPES = {
-  scout:   { name: 'Scout',   icon: '▸', hp: 22,   speed: 2.2, reward: 4,  leak: 1,  radius: 0.26, color: '#ffb84b', shape: 'dart', intro: 1,
+  scout:   { name: 'Scout',   icon: '▸', hp: 22,   speed: 2.2, reward: 4,  leak: 1,  radius: 0.26, color: '#ffb84b', shape: 'dart', debutMap: 0, debutWave: 1,
              trait: 'Quick, fragile line ship.' },
-  raider:  { name: 'Raider',  icon: '▶', hp: 60,   speed: 1.6, reward: 7,  leak: 1,  radius: 0.3,  color: '#ff4ecb', shape: 'dart', intro: 3,
+  raider:  { name: 'Raider',  icon: '▶', hp: 60,   speed: 1.6, reward: 7,  leak: 1,  radius: 0.3,  color: '#ff4ecb', shape: 'dart', debutMap: 0, debutWave: 2,
              trait: 'Tougher assault ship.' },
-  brute:   { name: 'Brute',   icon: '⬢', hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff5566', shape: 'hex', intro: 6,
+  brute:   { name: 'Brute',   icon: '⬢', hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff5566', shape: 'hex', debutMap: 0, debutWave: 5,
              trait: 'Slow heavy hull — costs 2 shields if it gets through.' },
-  swarm:   { name: 'Swarmer', icon: '▴', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri', intro: 7, announce: true,
+  swarm:   { name: 'Swarmer', icon: '▴', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri', debutMap: 0, debutWave: 6, announce: true,
              trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
-  shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'dart', shieldHits: 6, intro: 11, announce: true,
+  shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'dart', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
              trait: 'Energy shield blocks the first hits outright — rapid fire strips it, heavy shots are wasted on it.' },
-  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'hex', armor: 6, intro: 21, announce: true,
+  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'hex', armor: 6, debutMap: 1, debutWave: 8, announce: true,
              trait: 'Plating deflects flat damage from every hit — light rounds bounce off, heavy shots punch through.' },
-  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'dart', cloak: true, intro: 31, announce: true,
+  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'dart', cloak: true, debutMap: 2, debutWave: 8, announce: true,
              trait: 'Cloaked — turrets can\'t lock on until it\'s slowed. Frost sees through the cloak.' },
-  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, intro: 41, announce: true,
+  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 3, debutWave: 8, announce: true,
              trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
-  boss:    { name: 'Dreadnought', icon: '☠', hp: 1500, speed: 0.7, reward: 150, leak: 10, radius: 0.55, color: '#ff5566', shape: 'boss', intro: 10,
+  boss:    { name: 'Dreadnought', icon: '☠', hp: 1500, speed: 0.7, reward: 150, leak: 10, radius: 0.55, color: '#ff5566', shape: 'boss', debutMap: 0, debutWave: 10,
              trait: 'Massive command ship. Enrages below half health.' },
 };
 
-// Difficulty scaling with wave number.
-function hpMult(lvl) { return 1 + 0.22 * (lvl - 1) + 0.016 * (lvl - 1) * (lvl - 1); }
-function speedMult(lvl) { return 1 + 0.006 * lvl; }
-function rewardMult(lvl) { return 1 + 0.04 * lvl; }
+/* Difficulty scaling. HP grows quadratically within a map so a board of
+   never-upgraded cheap towers starts leaking around wave 15 — upgrading
+   (or buying the expensive types) is the only way through the back half.
+   Later maps stack a flat multiplier on top; starting credits rise a bit
+   to keep wave 1 buildable. */
+const TOTAL_WAVES = 30;
+const MAP_MULT = [1, 1.25, 1.55, 1.8, 2.1];
+const MAP_START_MONEY = [220, 280, 340, 410, 480];
+function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * MAP_MULT[state.mapIndex]; }
+function speedMult(w) { return 1 + 0.005 * w; }
+function rewardMult(w) { return 1 + 0.04 * w; }
 
 // Deterministic per-wave RNG — wave N is always the same wave N, so the
 // build-phase preview matches what actually spawns and retries are fair.
@@ -456,83 +465,81 @@ function mulberry32(seed) {
   };
 }
 
-/* Build the spawn list for a wave: [{type, t}] sorted by spawn time.
-   Waves are composed of squadron blocks (probe line, debut block, main
-   body, closer spike) instead of per-ship dice rolls, so each wave has a
-   shape. Must stay pure/deterministic: the preview UI calls it early. */
-function buildWave(lvl) {
-  const rng = mulberry32(lvl * 7919 + 1);
+/* Build the spawn list for wave w of a map: [{type, t}] sorted by spawn
+   time. Waves are composed of squadron blocks (probe line, debut block,
+   main body, closer) and the mix tilts heavier as the map progresses —
+   chaff early, brutes/shielded/armored hulls late — so raw enemy strength
+   (not gimmicks) is what forces upgrades. Must stay pure/deterministic:
+   the preview UI calls it early. */
+function buildWave(mapIdx, w) {
+  const rng = mulberry32((mapIdx * 997 + w) * 7919 + 1);
   const list = [];
   let t = 0.5;
-  const gap = Math.max(0.32, 1.05 - lvl * 0.014); // spawns tighten as waves go up
+  const gap = Math.max(0.3, 1.0 - w * 0.02); // spawns tighten as waves go up
   const push = (type, extraGap = 0) => { list.push({ type, t }); t += gap + extraGap; };
   const rest = (d) => { t += d; };
   const lineOf = (type, n) => { for (let i = 0; i < n; i++) push(type); };
   const packOf = (type, n, tight = 0.14) => { for (let k = 0; k < n; k++) { list.push({ type, t }); t += tight; } t += gap; };
   const mixed = (types, n) => { for (let i = 0; i < n; i++) push(types[(rng() * types.length) | 0]); };
-  const sector = Math.floor((lvl - 1) / 10) + 1;
+  const avail = (type) => { const d = ENEMY_TYPES[type]; return d.debutMap < mapIdx || (d.debutMap === mapIdx && w >= d.debutWave); };
 
-  if (lvl % 10 === 0) {
-    // Boss wave: sector-flavored escorts, the Dreadnought, then a rear guard.
-    lineOf(['raider', 'shield', 'aegis', 'phantom', 'aegis'][sector - 1], 4 + Math.floor(lvl / 5));
-    if (lvl >= 50) { rest(0.8); lineOf('mender', 2); }
+  if (w % 10 === 0) {
+    // Boss wave: escorts drawn from the strongest special this map knows.
+    const specials = ['shield', 'aegis', 'phantom'].filter(avail);
+    lineOf(specials.length ? specials[specials.length - 1] : 'raider', 5 + Math.floor(w / 4) + mapIdx);
+    if (avail('mender')) { rest(0.8); lineOf('mender', w === TOTAL_WAVES ? 3 : 1); }
     rest(1.5);
     push('boss', 2);
-    lineOf(lvl >= 30 ? 'brute' : 'scout', Math.floor(lvl / 4));
+    lineOf(w >= 5 ? 'brute' : 'scout', 3 + Math.floor(w / 5));
     return list;
   }
 
-  // Every x7 wave is the sector's themed gimmick — a memorable spike that
-  // tests whether the player built the sector's counter.
-  if (lvl % 10 === 7) {
-    switch (sector) {
-      case 1: packOf('swarm', 8, 0.16); lineOf('scout', 5); packOf('swarm', 10); rest(1); packOf('swarm', 12, 0.12); return list;
-      case 2: lineOf('shield', 9); rest(1.2); packOf('swarm', 8); lineOf('shield', 6); return list;
-      case 3: lineOf('aegis', 8); rest(1.2); lineOf('brute', 4); lineOf('aegis', 6); return list;
-      case 4: lineOf('phantom', 6); rest(1); mixed(['phantom', 'raider'], 10); rest(1); lineOf('phantom', 5); return list;
-      case 5: push('mender'); lineOf('brute', 4); push('mender'); lineOf('brute', 4); rest(1.2); push('mender'); lineOf('aegis', 5); return list;
-    }
+  // Weighted pool: chaff ages out, heavies and specials stack up late.
+  const pool = [];
+  if (w < 20) pool.push('scout');
+  if (w >= 2) pool.push('raider');
+  if (w >= 4) pool.push('raider');
+  if (w >= 5) pool.push('brute');
+  if (w >= 14) pool.push('brute');
+  if (w >= 24) pool.push('brute');
+  // specials join the mix a few waves in, even on maps that already know
+  // them — wave 2 shouldn't demand counters you can't afford yet
+  for (const s of ['shield', 'aegis', 'phantom']) {
+    if (!avail(s) || w < 5) continue;
+    pool.push(s);
+    if (w >= 15) pool.push(s);
+    if (w >= 23) pool.push(s);
   }
+  if (!pool.length) pool.push('scout');
 
-  // filler pool grows with the roster (raider twice = weighted up)
-  const pool = ['scout'];
-  if (lvl >= 3) pool.push('raider');
-  if (lvl >= 5) pool.push('raider');
-  if (lvl >= 6) pool.push('brute');
-  if (lvl >= 13) pool.push('shield');
-  if (lvl >= 23) pool.push('aegis');
-  if (lvl >= 33) pool.push('phantom');
-
-  let budget = Math.min(12 + Math.floor(lvl * 1.5), 56);
+  let budget = Math.min(10 + Math.floor(w * 1.9) + mapIdx * 3, 64);
 
   // probe line
-  const openN = 4 + Math.floor(lvl / 8);
-  lineOf(lvl >= 8 && rng() < 0.5 ? 'swarm' : 'scout', openN);
+  const openN = 4 + Math.floor(w / 6);
+  lineOf(w >= 6 && rng() < 0.5 ? 'swarm' : (w >= 20 ? 'raider' : 'scout'), openN);
   budget -= openN;
   rest(0.8);
 
-  // each sector's first wave debuts its new enemy right after the probe
-  const debut = { 11: 'shield', 21: 'aegis', 31: 'phantom', 41: 'mender' }[lvl];
-  if (debut) {
+  // this map's new enemy debuts as a showcased block
+  const debut = ['shield', 'aegis', 'phantom', 'mender', null][mapIdx];
+  if (debut && ENEMY_TYPES[debut].debutMap === mapIdx && w === ENEMY_TYPES[debut].debutWave) {
     if (debut === 'mender') { push('mender'); lineOf('raider', 3); push('mender'); lineOf('raider', 3); }
-    else lineOf(debut, 4 + ((rng() * 2) | 0));
+    else lineOf(debut, 4);
     budget -= 6;
     rest(1);
   }
 
   // main body
-  const mainN = Math.max(6, Math.floor(budget * 0.65));
+  const mainN = Math.max(6, Math.floor(budget * 0.7));
   mixed(pool, Math.floor(mainN / 2));
-  if (lvl >= 8 && rng() < 0.75) packOf('swarm', 5 + ((rng() * 4) | 0));
-  if (lvl >= 42 && rng() < 0.7) push('mender');
+  if (w >= 6 && rng() < 0.7) packOf('swarm', 5 + ((rng() * 4) | 0));
+  if (avail('mender') && w >= 12 && rng() < 0.3 + w * 0.01) push('mender');
   mixed(pool, Math.ceil(mainN / 2));
 
-  // closer spike
+  // closer
   rest(0.8);
-  if (lvl >= 8 && rng() < 0.5) packOf('swarm', 6);
-  else if (lvl >= 6) lineOf('brute', 2 + ((rng() * 2) | 0));
+  if (w >= 5) lineOf('brute', 1 + Math.floor(w / 8));
   else lineOf('scout', 3);
-  if (lvl >= 44 && rng() < 0.5) push('mender');
 
   return list;
 }
@@ -540,20 +547,38 @@ function buildWave(lvl) {
 /* ======================================================================
    GAME STATE
    ====================================================================== */
-const CHECKPOINTS = [
-  { wave: 1, money: 220 },
-  { wave: 11, money: 1500 },
-  { wave: 21, money: 3400 },
-  { wave: 31, money: 6400 },
-  { wave: 41, money: 10200 },
-];
-const KEY_BEST = 'stardefense_bestWave';
+/* Campaign progress: maps unlock in order, beating one unlocks the next.
+   Mid-map auto-checkpoints (waves 11/21) snapshot money/lives/towers so a
+   30-wave run never has to restart from scratch after a defeat. */
 const KEY_SCORE = 'stardefense_hiScore';
+const KEY_PROGRESS = 'stardefense_mapProgress';
+const KEY_CP = 'stardefense_cp_';
+
+let mapProgress = {};
+try { mapProgress = JSON.parse(localStorage.getItem(KEY_PROGRESS)) || {}; } catch (e) { mapProgress = {}; }
+function progFor(i) { return mapProgress[i] || (mapProgress[i] = { beaten: false, best: 0 }); }
+function saveProgress() { try { localStorage.setItem(KEY_PROGRESS, JSON.stringify(mapProgress)); } catch (e) { /* ignore */ } }
+function mapUnlocked(i) { return i === 0 || !!(mapProgress[i - 1] && mapProgress[i - 1].beaten); }
+function mapsBeaten() { return MAPS.filter((m, i) => mapProgress[i] && mapProgress[i].beaten).length; }
+
+function saveMapCheckpoint() {
+  const snap = {
+    wave: state.level, money: Math.floor(state.money), lives: state.lives,
+    towers: towers.map((t) => ({ type: t.type, col: t.col, row: t.row, level: t.level, invested: t.invested })),
+  };
+  try { localStorage.setItem(KEY_CP + state.mapIndex, JSON.stringify(snap)); } catch (e) { /* ignore */ }
+}
+function loadMapCheckpoint(i) {
+  try { return JSON.parse(localStorage.getItem(KEY_CP + i)); } catch (e) { return null; }
+}
+function clearMapCheckpoint(i) { try { localStorage.removeItem(KEY_CP + i); } catch (e) { /* ignore */ } }
 
 const state = {
   mode: 'menu',        // menu | playing | paused | over
   phase: 'build',      // build | wave
-  level: 1,
+  mapIndex: 0,         // map being played
+  mapSelect: 0,        // map highlighted on the menu
+  level: 1,            // wave number within the map (1..TOTAL_WAVES)
   money: 220,
   lives: 20,
   score: 0,
@@ -563,9 +588,7 @@ const state = {
   auto: false,
   autoTimer: 0,
   waveTime: 0,
-  bestWave: parseInt(localStorage.getItem(KEY_BEST) || '0', 10),
   hiScore: parseInt(localStorage.getItem(KEY_SCORE) || '0', 10),
-  checkpoint: 1,
   seen: new Set(),     // enemy types encountered this run (NEW tags/banners)
   placing: null,       // tower type index being placed, or null
   selected: null,      // built tower selected for upgrade/sell
@@ -583,7 +606,7 @@ let parts = [];           // particles
 let floats = [];          // floating texts
 let spawnQueue = [];
 
-function currentMap() { return MAPS[Math.min(4, Math.floor((state.level - 1) / 10))]; }
+function currentMap() { return MAPS[state.mapIndex]; }
 
 /* ======================================================================
    DOM REFS
@@ -600,7 +623,7 @@ function spawnEnemy(type) {
   const def = ENEMY_TYPES[type];
   const lvl = state.level;
   const hp = def.hp * hpMult(lvl);
-  const shieldHits = def.shieldHits ? def.shieldHits + Math.floor(lvl / 12) : 0;
+  const shieldHits = def.shieldHits ? def.shieldHits + Math.floor(lvl / 10) : 0;
   const e = {
     type, def,
     s: 0,
@@ -609,7 +632,7 @@ function spawnEnemy(type) {
     reward: Math.ceil(def.reward * rewardMult(lvl)),
     slowUntil: 0, slowPct: 0,
     shieldHits, shieldHitsMax: shieldHits, shieldRegen: 0,
-    armor: def.armor ? def.armor * (1 + 0.05 * lvl) : 0,
+    armor: def.armor ? def.armor * (1 + 0.06 * lvl) : 0,
     healPulse: 0,
     lastHit: -99,
     x: 0, y: 0, angle: 0,
@@ -756,8 +779,7 @@ function startWave() {
   if (state.phase !== 'build' || state.mode !== 'playing') return;
   state.phase = 'wave';
   state.waveTime = 0;
-  spawnQueue = buildWave(state.level);
-  const sector = Math.floor((state.level - 1) / 10) + 1;
+  spawnQueue = buildWave(state.mapIndex, state.level);
   // first-ever sighting of an announced type gets its intro banner instead
   // of the generic wave banner
   let debut = null;
@@ -768,39 +790,31 @@ function startWave() {
     }
   }
   if (debut) showBanner('⚠ NEW CONTACT: ' + debut.name.toUpperCase(), debut.trait);
-  else showBanner('WAVE ' + state.level, 'SECTOR ' + sector + ' — ' + currentMap().name.toUpperCase());
+  else showBanner('WAVE ' + state.level, currentMap().name.toUpperCase());
   updateWavePreview();
   updateHUD();
 }
 
 function waveComplete() {
-  const bonus = 70 + state.level * 12;
+  const bonus = 60 + state.level * 10;
   state.money += bonus;
   state.earned += bonus;
   state.score += bonus * 5;
   Sound.waveClear();
   addFloat(COLS / 2, ROWS / 2, 'WAVE BONUS +$' + bonus, '#5dffb0');
 
-  if (state.level > state.bestWave) {
-    state.bestWave = state.level;
-    try { localStorage.setItem(KEY_BEST, String(state.bestWave)); } catch (e) { /* ignore */ }
-  }
+  const prog = progFor(state.mapIndex);
+  if (state.level > prog.best) { prog.best = state.level; saveProgress(); }
 
-  if (state.level >= 50) { endGame(true); return; }
+  if (state.level >= TOTAL_WAVES) { endGame(true); return; }
 
   state.level++;
   state.phase = 'build';
 
-  if ((state.level - 1) % 10 === 0) {
-    // New sector: recall all turrets for a full refund, switch maps.
-    let refund = 0;
-    for (const t of towers) refund += t.invested;
-    state.money += refund;
-    towers = [];
-    grid = {};
-    state.selected = null;
-    closeUpgradePanel();
-    showBanner('SECTOR ' + Math.floor((state.level - 1) / 10) + ' CLEAR!', 'turrets recalled +$' + refund + ' — new map: ' + currentMap().name.toUpperCase());
+  // auto-checkpoint after each boss so a defeat never costs the whole map
+  if (state.level === 11 || state.level === 21) {
+    saveMapCheckpoint();
+    showBanner('WAVE ' + (state.level - 1) + ' CLEAR', 'checkpoint saved — +$' + bonus + ' bonus');
   } else {
     showBanner('WAVE ' + (state.level - 1) + ' CLEAR', '+$' + bonus + ' bonus');
   }
@@ -816,10 +830,20 @@ function endGame(victory) {
   Sound.stopMusic();
   if (victory) Sound.victory(); else Sound.gameOver();
 
+  if (victory) {
+    const prog = progFor(state.mapIndex);
+    prog.beaten = true;
+    prog.best = TOTAL_WAVES;
+    saveProgress();
+    clearMapCheckpoint(state.mapIndex);
+  }
+
   const title = $('endTitle');
-  title.textContent = victory ? '🏆 GALAXY SAVED!' : 'LINE BREACHED';
+  title.textContent = victory
+    ? (mapsBeaten() >= MAPS.length ? '🏆 GALAXY SAVED!' : '🏆 ' + currentMap().name.toUpperCase() + ' CLEARED!')
+    : 'LINE BREACHED';
   title.className = 'title ' + (victory ? 'victory-title' : 'gameover-title');
-  $('finalWave').textContent = victory ? '50 / 50' : state.level + ' / 50';
+  $('finalWave').textContent = (victory ? TOTAL_WAVES : state.level) + ' / ' + TOTAL_WAVES;
   $('finalScore').textContent = state.score.toLocaleString();
   $('finalKills').textContent = state.kills.toLocaleString();
   $('finalEarned').textContent = '$' + state.earned.toLocaleString();
@@ -831,6 +855,15 @@ function endGame(victory) {
     try { localStorage.setItem(KEY_SCORE, String(state.hiScore)); } catch (e) { /* ignore */ }
   }
   $('newRecord').classList.toggle('hidden', !record);
+
+  // after a win the primary button advances the campaign; after a loss it
+  // resumes from the mid-map checkpoint if one was saved
+  state.lastVictory = victory;
+  const cp = victory ? null : loadMapCheckpoint(state.mapIndex);
+  $('retryBtn').textContent = victory
+    ? (state.mapIndex + 1 < MAPS.length ? 'NEXT MAP ▶' : 'DEFEND AGAIN ▶')
+    : (cp ? '▶ RETRY FROM WAVE ' + cp.wave : 'DEFEND AGAIN ▶');
+  $('restartBtn').classList.toggle('hidden', !(!victory && cp));
 
   topbarEl.classList.add('hidden');
   shopEl.classList.add('hidden');
@@ -883,7 +916,7 @@ function updateWavePreview() {
     return;
   }
   const counts = {};
-  for (const s of buildWave(state.level)) counts[s.type] = (counts[s.type] || 0) + 1;
+  for (const s of buildWave(state.mapIndex, state.level)) counts[s.type] = (counts[s.type] || 0) + 1;
   $('wpLabel').textContent = 'WAVE ' + state.level;
   chipsEl.innerHTML = '';
   for (const type of Object.keys(ENEMY_TYPES)) {
@@ -1096,7 +1129,7 @@ window.addEventListener('keydown', (ev) => {
   if (DEBUG) {
     if (ev.key === 'm') { state.money += 5000; updateHUD(); }
     if (ev.key === 'k') { for (const e of enemies) { e.shieldHits = 0; e.armor = 0; damageEnemy(e, 1e9); } }
-    if (ev.key === 'j' && state.phase === 'build') { state.level = Math.min(50, state.level + 9); updateHUD(); updateWavePreview(); }
+    if (ev.key === 'j' && state.phase === 'build') { state.level = Math.min(TOTAL_WAVES, state.level + 9); updateHUD(); updateWavePreview(); }
   }
 });
 
@@ -1106,7 +1139,7 @@ window.addEventListener('keydown', (ev) => {
 function updateHUD() {
   $('moneyVal').textContent = '$' + Math.floor(state.money).toLocaleString();
   $('livesVal').textContent = state.lives;
-  $('waveVal').textContent = state.level + ' / 50';
+  $('waveVal').textContent = state.level + ' / ' + TOTAL_WAVES;
   $('scoreVal').textContent = state.score.toLocaleString();
   document.querySelector('.lives-block').classList.toggle('danger', state.lives <= 5);
   const wb = $('waveBtn');
@@ -1123,45 +1156,73 @@ function updateHUD() {
 /* ======================================================================
    MENU / FLOW
    ====================================================================== */
-function buildCheckpointCards() {
-  const wrap = $('checkpointSelect');
+function buildMapCards() {
+  const wrap = $('mapSelect');
   wrap.innerHTML = '';
-  CHECKPOINTS.forEach((cp) => {
-    const unlocked = cp.wave === 1 || state.bestWave >= cp.wave - 1;
+  if (!mapUnlocked(state.mapSelect)) state.mapSelect = 0;
+  MAPS.forEach((m, i) => {
+    const unlocked = mapUnlocked(i);
+    const prog = mapProgress[i];
+    const beaten = !!(prog && prog.beaten);
+    const cp = unlocked ? loadMapCheckpoint(i) : null;
     const card = document.createElement('div');
-    card.className = 'cp-card' + (unlocked ? '' : ' locked') + (state.checkpoint === cp.wave && unlocked ? ' selected' : '');
+    card.className = 'cp-card' + (unlocked ? '' : ' locked') + (state.mapSelect === i && unlocked ? ' selected' : '');
+    let desc;
+    if (!unlocked) desc = 'clear ' + MAPS[i - 1].name;
+    else if (beaten) desc = '★ cleared';
+    else if (cp) desc = 'checkpoint — wave ' + cp.wave;
+    else if (prog && prog.best > 0) desc = 'best wave ' + prog.best;
+    else desc = TOTAL_WAVES + ' waves';
     card.innerHTML =
-      '<div class="cp-icon">' + (unlocked ? '🛰️' : '🔒') + '</div>' +
-      '<div class="cp-name">WAVE ' + cp.wave + '</div>' +
-      '<div class="cp-desc">' + (unlocked ? '$' + cp.money + ' start' : 'clear wave ' + (cp.wave - 1)) + '</div>';
+      '<div class="cp-icon">' + (beaten ? '⭐' : unlocked ? '🛰️' : '🔒') + '</div>' +
+      '<div class="cp-name">' + m.name.toUpperCase() + '</div>' +
+      '<div class="cp-desc">' + desc + '</div>';
     if (unlocked) {
       card.addEventListener('click', () => {
-        state.checkpoint = cp.wave;
-        buildCheckpointCards();
+        state.mapSelect = i;
+        buildMapCards();
       });
     }
     wrap.appendChild(card);
   });
   $('bestStats').textContent =
-    'Best Wave: ' + state.bestWave + '  •  High Score: ' + state.hiScore.toLocaleString();
+    'Maps cleared: ' + mapsBeaten() + ' / ' + MAPS.length + '  •  High Score: ' + state.hiScore.toLocaleString();
 }
 
-function startGame(fromWave) {
-  const cp = CHECKPOINTS.find((c) => c.wave === fromWave) || CHECKPOINTS[0];
+function startGame(mapIdx) {
+  state.mapIndex = mapIdx;
+  state.mapSelect = mapIdx;
+  const cp = loadMapCheckpoint(mapIdx);
   state.mode = 'playing';
   state.phase = 'build';
-  state.level = cp.wave;
-  state.money = DEBUG ? 999999 : cp.money;
-  state.lives = 20;
+  state.level = cp ? cp.wave : 1;
+  state.money = DEBUG ? 999999 : (cp ? cp.money : MAP_START_MONEY[mapIdx]);
+  state.lives = cp ? cp.lives : 20;
   state.score = 0;
   state.kills = 0;
   state.earned = 0;
   state.autoTimer = 0;
   state.placing = null;
   state.selected = null;
-  // checkpoint starts skip the intro banners for types debuted earlier
-  state.seen = new Set(Object.keys(ENEMY_TYPES).filter((k) => ENEMY_TYPES[k].intro < cp.wave));
+  // types debuted on earlier maps (or before this checkpoint) skip banners
+  state.seen = new Set(Object.keys(ENEMY_TYPES).filter((k) => {
+    const d = ENEMY_TYPES[k];
+    return d.debutMap < mapIdx || (d.debutMap === mapIdx && d.debutWave < state.level);
+  }));
   towers = []; grid = {};
+  if (cp) {
+    // rebuild the saved defense exactly as it stood after the last boss
+    for (const s of cp.towers) {
+      const t = {
+        type: s.type, col: s.col, row: s.row,
+        x: s.col + 0.5, y: s.row + 0.5,
+        level: s.level, invested: s.invested,
+        cool: 0, angle: -Math.PI / 2, target: null,
+      };
+      towers.push(t);
+      grid[s.col + ',' + s.row] = t;
+    }
+  }
   enemies = []; bolts = []; shells = []; fx = []; parts = []; floats = [];
   spawnQueue = [];
 
@@ -1175,7 +1236,7 @@ function startGame(fromWave) {
   Sound.startMusic();
   updateHUD();
   updateWavePreview();
-  showBanner('SECTOR ' + (Math.floor((cp.wave - 1) / 10) + 1) + ' — ' + currentMap().name.toUpperCase(), 'build turrets, then start the wave');
+  showBanner(currentMap().name.toUpperCase(), cp ? 'resuming from checkpoint — wave ' + cp.wave : 'build turrets, then start the wave');
 }
 
 function goToMenu() {
@@ -1186,7 +1247,7 @@ function goToMenu() {
   pauseEl.classList.add('hidden');
   topbarEl.classList.add('hidden');
   shopEl.classList.add('hidden');
-  buildCheckpointCards();
+  buildMapCards();
   updateWavePreview();
   resize();
 }
@@ -1203,14 +1264,17 @@ function togglePause() {
   }
 }
 
-$('startBtn').addEventListener('click', () => startGame(state.checkpoint));
+$('startBtn').addEventListener('click', () => startGame(state.mapSelect));
 $('retryBtn').addEventListener('click', () => {
-  // retry from the highest unlocked checkpoint at or below the wave reached
-  let cp = 1;
-  for (const c of CHECKPOINTS) {
-    if (c.wave <= state.level && (c.wave === 1 || state.bestWave >= c.wave - 1)) cp = c.wave;
-  }
-  startGame(cp);
+  // after a win: advance to the next map; after a loss: retry this one
+  // (startGame resumes from the mid-map checkpoint if one exists)
+  const next = state.mapIndex + 1;
+  if (state.lastVictory && next < MAPS.length && mapUnlocked(next)) startGame(next);
+  else startGame(state.mapIndex);
+});
+$('restartBtn').addEventListener('click', () => {
+  clearMapCheckpoint(state.mapIndex);
+  startGame(state.mapIndex);
 });
 $('menuBtn').addEventListener('click', goToMenu);
 $('resumeBtn').addEventListener('click', togglePause);
@@ -1813,5 +1877,5 @@ function loop(now) {
 resize();
 initStars();
 buildShopCards();
-buildCheckpointCards();
+buildMapCards();
 requestAnimationFrame(loop);
