@@ -521,7 +521,7 @@ const MAPS = [
 ];
 
 // Turns a waypoint list into the {pts, segLen, totalLen, cells} shape that
-// pathPoint()/drawPath()/drawPortal()/drawBase() all just need duck-typed —
+// pathPoint()/strokeRoad()/drawPortal()/drawBase() all just need duck-typed —
 // none of them care whether they're looking at a map's primary path or a
 // secondary one, which is what lets Gauntlet's second lane reuse all of
 // them unchanged.
@@ -1902,27 +1902,43 @@ function updateParticlesOnly(dt) {
 /* ======================================================================
    RENDER
    ====================================================================== */
-function drawPath(map) {
+// Road rendering is done in ordered layers ACROSS ALL path pieces, not
+// piece-by-piece: every piece's outer glow is stroked first, then every
+// piece's dark fill on top, then the chevrons. On a dual-lane map the
+// pieces meet at a shared junction (see splitSharedTrunk); if a piece drew
+// its own glow-then-fill before the next piece, a later piece's bright glow
+// cap would paint over an earlier piece's dark fill and leave a stray
+// "pill" outline poking out of the merge point. Filling everything only
+// after all glows are down means the dark fills cover those internal bright
+// arcs, so only the outer edge of the merged shape glows — a clean union.
+function strokeRoad(map, layer) {
+  // butt caps (not round): a round cap on the trunk piece where it starts
+  // at the shared junction pokes a rounded "pill" out past the merged road;
+  // a flat cap lets the pieces butt together seamlessly. Round line-JOINS
+  // still keep every elbow corner rounded, and the outer road ends are off
+  // the board edge, so nothing visible loses its rounded look.
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(px(map.pts[0].x), py(map.pts[0].y));
+  for (let i = 1; i < map.pts.length; i++) ctx.lineTo(px(map.pts[i].x), py(map.pts[i].y));
+  if (layer === 'glow') {
+    ctx.strokeStyle = 'rgba(75, 245, 255, 0.28)';
+    ctx.lineWidth = cell * 0.92;
+    ctx.shadowColor = 'rgba(75,245,255,0.5)';
+    ctx.shadowBlur = 14;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.strokeStyle = 'rgba(7, 9, 30, 0.94)';
+    ctx.lineWidth = cell * 0.8;
+    ctx.stroke();
+  }
+}
+
+function drawRoadChevrons(map) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const path = () => {
-    ctx.beginPath();
-    ctx.moveTo(px(map.pts[0].x), py(map.pts[0].y));
-    for (let i = 1; i < map.pts.length; i++) ctx.lineTo(px(map.pts[i].x), py(map.pts[i].y));
-  };
-  // outer containment-field glow
-  path();
-  ctx.strokeStyle = 'rgba(75, 245, 255, 0.28)';
-  ctx.lineWidth = cell * 0.92;
-  ctx.shadowColor = 'rgba(75,245,255,0.5)';
-  ctx.shadowBlur = 14;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  // void trench fill
-  path();
-  ctx.strokeStyle = 'rgba(7, 9, 30, 0.94)';
-  ctx.lineWidth = cell * 0.8;
-  ctx.stroke();
   // flowing energy chevrons — a lane, not a road with lane-marking dashes.
   // Only shown during the build phase; once a wave is live there's enough
   // going on (enemies, shots, effects) that they're just clutter.
@@ -2547,8 +2563,12 @@ function render() {
 
   const map = currentMap();
   // renderPaths already dedupes a dual-spawn map's shared trunk (see
-  // splitSharedTrunk) so it's stroked once, not once per lane
-  for (const p of map.renderPaths) drawPath(p);
+  // splitSharedTrunk) so it's stroked once, not once per lane. Draw in
+  // layers across all pieces (all glows, then all fills, then chevrons) so
+  // the pieces merge cleanly at a shared junction — see strokeRoad().
+  for (const p of map.renderPaths) strokeRoad(p, 'glow');
+  for (const p of map.renderPaths) strokeRoad(p, 'fill');
+  for (const p of map.renderPaths) drawRoadChevrons(p);
   drawPortal(map);
   if (map.path2) drawPortal(map.path2); // each lane's own mothership — no overlap concern here
   drawBase(map); // both lanes converge on the same base — one is enough
