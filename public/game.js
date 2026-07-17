@@ -1268,9 +1268,11 @@ function buildShopCards() {
     card.style.setProperty('--tc-glow', ty.glow);
     card.dataset.index = i;
     card.innerHTML =
-      '<canvas class="tw-icon" width="72" height="72"></canvas>' +
       '<div class="tw-name">' + ty.name + '</div>' +
-      '<div class="tw-cost">$' + ty.cost + '</div>';
+      '<div class="tw-row">' +
+        '<canvas class="tw-icon" width="72" height="72"></canvas>' +
+        '<div class="tw-cost">$' + ty.cost + '</div>' +
+      '</div>';
     drawShopIcon(card.querySelector('.tw-icon'), ty);
 
     card.addEventListener('pointerdown', (ev) => {

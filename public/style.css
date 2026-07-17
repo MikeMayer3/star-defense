@@ -37,13 +37,19 @@ html, body {
 }
 
 canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* only the two full-screen background/game canvases should be fixed and
+   cover the viewport — other canvases (e.g. shop icons) must stay in
+   normal flow, so this is scoped by ID rather than the bare `canvas` tag */
+#bg, #game {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  display: block;
-  touch-action: none;
 }
 
 #bg { z-index: 0; }
@@ -258,17 +264,21 @@ canvas {
 @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
 
 /* ============ BOTTOM-LEFT UTILITY COLUMN (speed/auto/pause) ============ */
-/* stacked well above the floating Start Wave button (also bottom-anchored,
-   centered) so the two never overlap despite both hugging the bottom edge */
+/* lives directly under the Space Bucks/Shields/Wave column, same width,
+   pinned to the bottom — clear of the floating Start Wave button since
+   that one is centered and this column never leaves the left rail's width */
 #topbar {
   position: fixed;
-  bottom: 64px; left: calc(var(--rail-w) + 8px);
+  bottom: 12px; left: 0;
   z-index: 10;
+  width: var(--rail-w);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 6px;
 }
 #topbar.hidden { display: none; }
+#topbar .hud-btn { width: 84%; }
 
 /* Start Wave — floats bottom-center over the board, not part of the flow */
 .wave-btn {
@@ -418,7 +428,7 @@ canvas {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255,255,255,0.15);
   border-radius: 10px;
-  padding: 8px 4px 7px;
+  padding: 7px 4px;
   width: 100%;
   text-align: center;
   cursor: pointer;
@@ -440,9 +450,12 @@ canvas {
   background: rgba(20, 26, 60, 0.9);
 }
 .tower-card.broke { opacity: 0.38; }
-.tower-card .tw-icon { display: block; width: 34px; height: 34px; margin: 0 auto; }
-.tower-card .tw-name { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 5px; line-height: 1.2; }
-.tower-card .tw-cost { font-size: 0.76rem; font-weight: 800; color: var(--neon-yellow); margin-top: 1px; }
+/* name on its own line up top, icon + price side-by-side below it —
+   keeps the icon from ever crowding the name text at any icon size */
+.tower-card .tw-name { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; line-height: 1.2; }
+.tower-card .tw-row { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 5px; }
+.tower-card .tw-icon { display: block; width: 26px; height: 26px; flex-shrink: 0; }
+.tower-card .tw-cost { font-size: 0.76rem; font-weight: 800; color: var(--neon-yellow); }
 
 /* ============ UPGRADE PANEL (swaps into the right rail) ============ */
 .upgrade-panel {
