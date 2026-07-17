@@ -536,6 +536,11 @@ const TOWER_TYPES = [
     id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
     desc: 'pierces down the line', cost: 320, dmg: 95, rate: 0.45, range: 5.2, upCost: [255, 490],
   },
+  {
+    id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
+    desc: 'boosts nearby towers', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 210],
+    buffDmg: 0.15, buffRate: 0.15,
+  },
 ];
 
 // Effective stats for a tower instance at its current level.
@@ -551,6 +556,8 @@ function towerStats(t) {
     slowDur: 1.6 + 0.35 * l,      // frost
     splash: 1.25 + 0.2 * l,       // mortar
     chains: 3 + l,                // tesla (extra jumps beyond first target)
+    buffDmg: ty.buffDmg ? ty.buffDmg + 0.05 * l : 0,   // beacon
+    buffRate: ty.buffRate ? ty.buffRate + 0.05 * l : 0, // beacon
     upCost: t.level < 3 ? ty.upCost[t.level - 1] : null,
   };
 }
@@ -1134,6 +1141,26 @@ document.addEventListener('click', (ev) => {
 /* ======================================================================
    SHOP / UPGRADE UI
    ====================================================================== */
+// Drag-to-place: press a card and drag it onto the board, release to drop.
+// A plain tap (no meaningful movement) falls back to the old arm-then-tap-
+// the-board flow, so both placement styles keep working side by side.
+const dragGhostEl = $('dragGhost');
+let cardDrag = null; // { type, pointerId, startX, startY, moved }
+
+function showDragGhost(typeIndex, x, y) {
+  const ty = TOWER_TYPES[typeIndex];
+  dragGhostEl.textContent = ty.icon;
+  dragGhostEl.style.color = ty.color;
+  dragGhostEl.style.left = x + 'px';
+  dragGhostEl.style.top = y + 'px';
+  dragGhostEl.classList.remove('hidden');
+}
+function moveDragGhost(x, y) {
+  dragGhostEl.style.left = x + 'px';
+  dragGhostEl.style.top = y + 'px';
+}
+function hideDragGhost() { dragGhostEl.classList.add('hidden'); }
+
 function buildShopCards() {
   towerCardsEl.innerHTML = '';
   TOWER_TYPES.forEach((ty, i) => {
@@ -1146,12 +1173,51 @@ function buildShopCards() {
       '<div class="tw-icon">' + ty.icon + '</div>' +
       '<div class="tw-name">' + ty.name + '</div>' +
       '<div class="tw-cost">$' + ty.cost + '</div>';
-    card.addEventListener('click', () => {
-      closeUpgradePanel();
-      if (state.placing === i) { setPlacing(null); return; }
+
+    card.addEventListener('pointerdown', (ev) => {
+      if (state.mode !== 'playing' || ev.button > 0) return;
       if (state.money < ty.cost) { Sound.invalid(); return; }
+      ev.preventDefault();
+      try { card.setPointerCapture(ev.pointerId); } catch (e) { /* ignore — rare, but shouldn't block the tap/arm below */ }
+      // remember whether this card was already armed *before* this
+      // pointerdown arms it — a plain tap needs that to decide whether to
+      // toggle off (tapping an already-armed card) or leave it armed
+      // (tapping a fresh one), same semantics as the old click handler.
+      const wasArmed = state.placing === i;
+      cardDrag = { type: i, pointerId: ev.pointerId, startX: ev.clientX, startY: ev.clientY, moved: false, wasArmed };
+      closeUpgradePanel();
       setPlacing(i);
+      showDragGhost(i, ev.clientX, ev.clientY);
     });
+    card.addEventListener('pointermove', (ev) => {
+      if (!cardDrag || ev.pointerId !== cardDrag.pointerId) return;
+      if (Math.hypot(ev.clientX - cardDrag.startX, ev.clientY - cardDrag.startY) > 6) cardDrag.moved = true;
+      moveDragGhost(ev.clientX, ev.clientY);
+      state.hover = cellFromEvent(ev);
+    });
+    card.addEventListener('pointerup', (ev) => {
+      if (!cardDrag || ev.pointerId !== cardDrag.pointerId) return;
+      try { card.releasePointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      hideDragGhost();
+      const { type, moved, wasArmed } = cardDrag;
+      cardDrag = null;
+      if (!moved) {
+        // simple tap: disarm if it was already armed, otherwise leave it
+        // armed (pointerdown already did the arming)
+        if (wasArmed) setPlacing(null);
+        return;
+      }
+      const c = cellFromEvent(ev);
+      setPlacing(null);
+      if (c) placeTowerAt(type, c.col, c.row);
+    });
+    card.addEventListener('pointercancel', (ev) => {
+      if (!cardDrag || ev.pointerId !== cardDrag.pointerId) return;
+      cardDrag = null;
+      hideDragGhost();
+      setPlacing(null);
+    });
+
     towerCardsEl.appendChild(card);
   });
 }
@@ -1174,8 +1240,9 @@ function openUpgradePanel(t) {
   const ty = TOWER_TYPES[t.type];
   const st = towerStats(t);
   $('upName').textContent = ty.icon + ' ' + ty.name + ' — LVL ' + t.level;
-  $('upStats').textContent =
-    'DMG ' + Math.round(st.dmg) + ' · RATE ' + st.rate.toFixed(1) + '/s · RNG ' + st.range.toFixed(1);
+  $('upStats').textContent = ty.id === 'beacon'
+    ? 'DMG +' + Math.round(st.buffDmg * 100) + '% · RATE +' + Math.round(st.buffRate * 100) + '% · RNG ' + st.range.toFixed(1)
+    : 'DMG ' + Math.round(st.dmg) + ' · RATE ' + st.rate.toFixed(1) + '/s · RNG ' + st.range.toFixed(1);
   const upBtn = $('upgradeBtn');
   if (st.upCost != null) {
     upBtn.textContent = '⬆ UPGRADE $' + st.upCost;
@@ -1240,6 +1307,27 @@ function canBuildAt(col, row) {
   return !currentMap().cells.has(key) && !grid[key];
 }
 
+// Shared by both placement paths: tap-to-arm-then-tap-the-board, and
+// drag-a-card-and-drop-it-on-a-tile. Returns whether the tower was placed.
+function placeTowerAt(typeIndex, col, row) {
+  const ty = TOWER_TYPES[typeIndex];
+  if (!canBuildAt(col, row) || state.money < ty.cost) { Sound.invalid(); return false; }
+  const t = {
+    type: typeIndex,
+    col, row,
+    x: col + 0.5, y: row + 0.5,
+    level: 1, invested: ty.cost,
+    cool: 0, angle: -Math.PI / 2, target: null,
+  };
+  towers.push(t);
+  grid[col + ',' + row] = t;
+  state.money -= ty.cost;
+  Sound.place();
+  burst(t.x, t.y, ty.color, 10);
+  updateHUD();
+  return true;
+}
+
 cv.addEventListener('pointermove', (ev) => {
   state.hover = cellFromEvent(ev);
 });
@@ -1255,22 +1343,8 @@ cv.addEventListener('click', (ev) => {
   if (grid[key]) { openUpgradePanel(grid[key]); return; }
 
   if (state.placing != null) {
-    const ty = TOWER_TYPES[state.placing];
-    if (!canBuildAt(c.col, c.row) || state.money < ty.cost) { Sound.invalid(); return; }
-    const t = {
-      type: state.placing,
-      col: c.col, row: c.row,
-      x: c.col + 0.5, y: c.row + 0.5,
-      level: 1, invested: ty.cost,
-      cool: 0, angle: -Math.PI / 2, target: null,
-    };
-    towers.push(t);
-    grid[key] = t;
-    state.money -= ty.cost;
-    Sound.place();
-    burst(t.x, t.y, ty.color, 10);
-    if (state.money < ty.cost) setPlacing(null); // can't afford another
-    updateHUD();
+    const type = state.placing;
+    if (placeTowerAt(type, c.col, c.row) && state.money < TOWER_TYPES[type].cost) setPlacing(null); // can't afford another
     return;
   }
 
@@ -1294,7 +1368,7 @@ window.addEventListener('keydown', (ev) => {
   if (state.mode !== 'playing') return;
   if (ev.key === ' ') { ev.preventDefault(); startWave(); }
   const n = parseInt(ev.key, 10);
-  if (n >= 1 && n <= 6) {
+  if (n >= 1 && n <= TOWER_TYPES.length) {
     closeUpgradePanel();
     if (state.money >= TOWER_TYPES[n - 1].cost) setPlacing(n - 1); else Sound.invalid();
   }
@@ -1512,6 +1586,18 @@ function update(dt) {
     state.autoTimer -= dt;
     if (state.autoTimer <= 0) startWave();
   }
+
+  // Keep the buffed-tower outline accurate even during the build phase —
+  // the combat loop below (which also sets t.buffed while applying the
+  // actual damage/rate multiplier) only runs mid-wave, but a player
+  // placing towers should see the effect land immediately, not just once
+  // the next wave starts.
+  const liveBeacons = towers.filter((tw) => TOWER_TYPES[tw.type].id === 'beacon');
+  for (const tw of towers) {
+    if (TOWER_TYPES[tw.type].id === 'beacon') { tw.buffed = false; continue; }
+    tw.buffed = liveBeacons.some((b) => Math.hypot(b.x - tw.x, b.y - tw.y) <= towerStats(b).range);
+  }
+
   if (state.phase !== 'wave') {
     updateParticlesOnly(dt);
     return;
@@ -1558,10 +1644,26 @@ function update(dt) {
   }
 
   // towers
+  const beacons = towers.filter((t) => TOWER_TYPES[t.type].id === 'beacon');
   for (const t of towers) {
+    const tty = TOWER_TYPES[t.type];
+    if (tty.id === 'beacon') continue; // pure support — never targets or fires
     t.cool -= dt;
     const st = towerStats(t);
-    const seesCloaked = TOWER_TYPES[t.type].id === 'frost';
+    // Command Beacon aura: stacks with every beacon in range, boosting this
+    // tower's damage and fire rate for the shot(s) it's about to take.
+    // t.buffed just records whether any applied, for drawTower's benefit —
+    // otherwise a buffed tower looks no different from an unbuffed one.
+    t.buffed = false;
+    for (const b of beacons) {
+      const bst = towerStats(b);
+      if (Math.hypot(b.x - t.x, b.y - t.y) <= bst.range) {
+        st.dmg *= 1 + bst.buffDmg;
+        st.rate *= 1 + bst.buffRate;
+        t.buffed = true;
+      }
+    }
+    const seesCloaked = tty.id === 'frost';
     let best = null, bestS = -1;
     for (const e of enemies) {
       if (e.dead) continue;
@@ -1659,23 +1761,27 @@ function drawPath(map) {
   ctx.strokeStyle = 'rgba(7, 9, 30, 0.94)';
   ctx.lineWidth = cell * 0.8;
   ctx.stroke();
-  // flowing energy chevrons — a lane, not a road with lane-marking dashes
-  const spacing = cell * 0.62;
-  const phase = (performance.now() / 380) % spacing;
-  const halfW = cell * 0.13, tip = cell * 0.17;
-  ctx.strokeStyle = 'rgba(75, 245, 255, 0.55)';
-  ctx.lineWidth = 2;
-  for (let s = phase; s < map.totalLen; s += spacing) {
-    const p = pathPoint(map, s);
-    ctx.save();
-    ctx.translate(px(p.x), py(p.y));
-    ctx.rotate(p.angle);
-    ctx.beginPath();
-    ctx.moveTo(-tip, -halfW);
-    ctx.lineTo(tip * 0.4, 0);
-    ctx.lineTo(-tip, halfW);
-    ctx.stroke();
-    ctx.restore();
+  // flowing energy chevrons — a lane, not a road with lane-marking dashes.
+  // Only shown during the build phase; once a wave is live there's enough
+  // going on (enemies, shots, effects) that they're just clutter.
+  if (state.phase !== 'wave') {
+    const spacing = cell * 0.62;
+    const phase = (performance.now() / 380) % spacing;
+    const halfW = cell * 0.13, tip = cell * 0.17;
+    ctx.strokeStyle = 'rgba(75, 245, 255, 0.55)';
+    ctx.lineWidth = 2;
+    for (let s = phase; s < map.totalLen; s += spacing) {
+      const p = pathPoint(map, s);
+      ctx.save();
+      ctx.translate(px(p.x), py(p.y));
+      ctx.rotate(p.angle);
+      ctx.beginPath();
+      ctx.moveTo(-tip, -halfW);
+      ctx.lineTo(tip * 0.4, 0);
+      ctx.lineTo(-tip, halfW);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 }
 
@@ -1854,6 +1960,17 @@ function drawTower(t) {
   ctx.stroke();
   ctx.globalAlpha = 1;
 
+  // currently boosted by a Command Beacon — a pulsing amber outline on the
+  // pad itself, so the buff has visible proof rather than being inferred
+  // purely from standing inside the beacon's aura ring
+  if (t.buffed) {
+    const bp = 0.5 + Math.sin(performance.now() / 200) * 0.3;
+    ctx.strokeStyle = 'rgba(255, 170, 51, ' + bp + ')';
+    ctx.lineWidth = 2.5;
+    roundRect(x - s * 0.82, y - s * 0.82, s * 1.64, s * 1.64, s * 0.3);
+    ctx.stroke();
+  }
+
   // turret (rotates toward target)
   ctx.translate(x, y);
   ctx.rotate(t.angle);
@@ -1915,23 +2032,54 @@ function drawTower(t) {
       ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color);
       circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff');
       break;
+    case 'beacon': {
+      // command beacon: a core with three relay nodes slowly orbiting it,
+      // always broadcasting — never aims, so this spins independently of
+      // the tower's (unused) aim angle
+      const spin = performance.now() / 900;
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i / 3) * Math.PI * 2;
+        const nx = Math.cos(a) * s * 0.42, ny = Math.sin(a) * s * 0.42;
+        ctx.strokeStyle = ty.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+        circle(nx, ny, s * 0.1, ty.color);
+      }
+      circle(0, 0, s * 0.22, ty.color);
+      circle(0, 0, s * 0.1, '#ffffff');
+      break;
+    }
   }
   ctx.restore();
 
-  // frost is an aura, not an aimed gun — always show its reach so the
-  // player can see coverage without having to select each one
-  if (ty.id === 'frost') {
+  // frost and the command beacon are auras, not aimed guns — always show
+  // their reach so the player can see coverage without selecting each one.
+  // Deliberately NOT a dashed ring: that pattern is reserved for the
+  // placement-preview and selected-tower UI, so an aura drawn the same way
+  // reads as "you're interacting with this" instead of "this is always on."
+  // A soft fill + faint solid rim + a slow outward ripple reads as an
+  // ambient field instead.
+  if (ty.id === 'frost' || ty.id === 'beacon') {
     const rng = towerStats(t).range;
-    const pulse = 0.14 + Math.sin(performance.now() / 500 + t.col + t.row) * 0.05;
+    const auraColor = ty.id === 'frost' ? '159, 216, 255' : '255, 170, 51';
+    const seed = t.col * 0.37 + t.row * 0.61;
     ctx.beginPath();
     ctx.arc(x, y, rng * cell, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(159, 216, 255, 0.4)';
-    ctx.setLineDash([5, 7]);
+    ctx.fillStyle = 'rgba(' + auraColor + ', 0.045)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(' + auraColor + ', 0.14)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(159, 216, 255, ' + pulse + ')';
-    ctx.fill();
+    const period = 2.6;
+    const k = ((performance.now() / 1000 + seed * period) % period) / period;
+    ctx.beginPath();
+    ctx.arc(x, y, rng * cell * k, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(' + auraColor + ', ' + (0.4 * (1 - k)) + ')';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   // level pips
@@ -1939,8 +2087,10 @@ function drawTower(t) {
     circle(x - s * 0.5 + i * s * 0.32 + s * 0.18, y + s * 0.68, 2.2, ty.color);
   }
 
-  // selected: show range
-  if (state.selected === t) {
+  // selected: show range — skipped for aura towers, which already draw
+  // their own persistent range visual above; adding the generic dashed
+  // selection ring on top just doubles up in a mismatched color
+  if (state.selected === t && ty.id !== 'frost' && ty.id !== 'beacon') {
     const st = towerStats(t);
     ctx.beginPath();
     ctx.arc(x, y, st.range * cell, 0, Math.PI * 2);
@@ -2261,6 +2411,20 @@ initStars();
 buildShopCards();
 buildMapCards();
 requestAnimationFrame(loop);
+
+// Belt-and-suspenders zoom lock — the viewport meta tag and CSS
+// touch-action already block most zoom gestures, but some browsers
+// (notably older Safari, and a few Android builds) still need these
+// caught directly to fully kill pinch-zoom and double-tap-zoom.
+document.addEventListener('gesturestart', (ev) => ev.preventDefault());
+document.addEventListener('gesturechange', (ev) => ev.preventDefault());
+document.addEventListener('touchmove', (ev) => { if (ev.touches.length > 1) ev.preventDefault(); }, { passive: false });
+let lastTouchEndAt = 0;
+document.addEventListener('touchend', (ev) => {
+  const now = Date.now();
+  if (now - lastTouchEndAt < 300) ev.preventDefault();
+  lastTouchEndAt = now;
+}, { passive: false });
 
 // PWA: offline cache + installability (required for the Android TWA wrap)
 if ('serviceWorker' in navigator) {

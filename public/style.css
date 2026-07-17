@@ -26,6 +26,10 @@ html, body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
+  /* no pinch-zoom, double-tap-zoom, or browser panning anywhere in-app —
+     backs up the viewport meta tag, which some Android builds ignore */
+  touch-action: none;
+  -ms-touch-action: none;
 }
 
 canvas {
@@ -35,6 +39,7 @@ canvas {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;
 }
 
 #bg { z-index: 0; }
@@ -392,7 +397,7 @@ canvas {
 .tower-cards {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
@@ -400,8 +405,8 @@ canvas {
 .tower-card {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255,255,255,0.15);
-  border-radius: 10px;
-  padding: 4px 4px 3px;
+  border-radius: 9px;
+  padding: 3px 3px 2px;
   width: 100%;
   text-align: center;
   cursor: pointer;
@@ -416,9 +421,9 @@ canvas {
   background: rgba(20, 26, 60, 0.9);
 }
 .tower-card.broke { opacity: 0.38; }
-.tower-card .tw-icon { font-size: 1.2rem; line-height: 1.1; filter: drop-shadow(0 0 6px var(--tc, var(--neon-cyan))); }
-.tower-card .tw-name { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.2px; color: #dceaff; margin-top: 1px; }
-.tower-card .tw-cost { font-size: 0.7rem; font-weight: 800; color: var(--neon-yellow); }
+.tower-card .tw-icon { font-size: 1.05rem; line-height: 1.05; filter: drop-shadow(0 0 6px var(--tc, var(--neon-cyan))); }
+.tower-card .tw-name { font-size: 0.52rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 1px; }
+.tower-card .tw-cost { font-size: 0.64rem; font-weight: 800; color: var(--neon-yellow); }
 
 /* ============ UPGRADE PANEL (swaps into the right rail) ============ */
 .upgrade-panel {
@@ -456,6 +461,17 @@ canvas {
 }
 .sell-btn:hover { background: rgba(255, 231, 75, 0.12); box-shadow: 0 0 14px rgba(255,231,75,0.35); }
 .close-up { margin-top: 0; width: 100%; padding: 8px 6px; }
+
+/* ============ DRAG GHOST ============ */
+#dragGhost {
+  position: fixed;
+  z-index: 21;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  font-size: 1.9rem;
+  filter: drop-shadow(0 0 10px currentColor);
+}
+#dragGhost.hidden { display: none; }
 
 /* ============ BANNER ============ */
 .banner {
