@@ -18,7 +18,7 @@ const cv = document.getElementById('game');
 const bgCtx = bgCanvas.getContext('2d');
 const ctx = cv.getContext('2d');
 
-const COLS = 22, ROWS = 13;
+const COLS = 18, ROWS = 11;
 let W = 0, H = 0, dpr = 1;
 let cell = 40, boardX = 0, boardY = 0;
 
@@ -458,33 +458,52 @@ function drawStarfield(dt) {
    between cell centers. Off-board waypoints (-1 / 22) make ships fly in
    from and out past the board edge.
    ====================================================================== */
+// Maps are shorter and more distinct-shaped than the campaign's original
+// set, sized for the smaller 18x11 grid. Gauntlet is the one dual-spawn
+// map (wp2): two independent lanes enter from opposite sides and share a
+// final trunk into the same base — see buildPath()/render() below for how
+// a second path piggybacks on all the normal single-path machinery.
 const MAPS = [
-  { name: 'Corridor',   wp: [[-1, 2], [17, 2], [17, 7], [4, 7], [4, 10], [22, 10]] },
-  { name: 'Serpent',    wp: [[-1, 6], [3, 6], [3, 1], [8, 1], [8, 11], [13, 11], [13, 1], [18, 1], [18, 11], [22, 11]] },
-  { name: 'Switchback', wp: [[-1, 1], [19, 1], [19, 4], [2, 4], [2, 7], [19, 7], [19, 10], [22, 10]] },
-  { name: 'Zigzag',     wp: [[-1, 11], [3, 11], [3, 2], [7, 2], [7, 9], [11, 9], [11, 2], [15, 2], [15, 9], [19, 9], [19, 2], [22, 2]] },
-  { name: 'Gauntlet',   wp: [[-1, 1], [20, 1], [20, 4], [2, 4], [2, 7], [20, 7], [20, 10], [22, 10]] },
+  { name: 'Corridor',   wp: [[-1, 2], [10, 2], [10, 7], [18, 7]] },
+  { name: 'Serpent',    wp: [[-1, 3], [5, 3], [5, 8], [12, 8], [12, 2], [18, 2]] },
+  { name: 'Switchback', wp: [[-1, 1], [11, 1], [11, 4], [3, 4], [3, 7], [11, 7], [11, 9], [18, 9]] },
+  { name: 'Zigzag',     wp: [[-1, 9], [4, 9], [4, 2], [8, 2], [8, 9], [12, 9], [12, 2], [18, 2]] },
+  {
+    name: 'Gauntlet',
+    wp:  [[-1, 2], [9, 2], [9, 5], [18, 5]],
+    wp2: [[-1, 9], [9, 9], [9, 5], [18, 5]],
+  },
 ];
 
-// Precompute per-map: waypoint centers (cell units), segment lengths, path cell set.
-for (const m of MAPS) {
-  m.pts = m.wp.map(([c, r]) => ({ x: c + 0.5, y: r + 0.5 }));
-  m.segLen = [];
-  m.totalLen = 0;
-  m.cells = new Set();
-  for (let i = 0; i < m.pts.length - 1; i++) {
-    const a = m.pts[i], b = m.pts[i + 1];
+// Turns a waypoint list into the {pts, segLen, totalLen, cells} shape that
+// pathPoint()/drawPath()/drawPortal()/drawBase() all just need duck-typed —
+// none of them care whether they're looking at a map's primary path or a
+// secondary one, which is what lets Gauntlet's second lane reuse all of
+// them unchanged.
+function buildPath(wp) {
+  const p = { pts: wp.map(([c, r]) => ({ x: c + 0.5, y: r + 0.5 })), segLen: [], totalLen: 0, cells: new Set() };
+  for (let i = 0; i < p.pts.length - 1; i++) {
+    const a = p.pts[i], b = p.pts[i + 1];
     const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y); // axis-aligned
-    m.segLen.push(len);
-    m.totalLen += len;
-    const [c0, r0] = m.wp[i], [c1, r1] = m.wp[i + 1];
+    p.segLen.push(len);
+    p.totalLen += len;
+    const [c0, r0] = wp[i], [c1, r1] = wp[i + 1];
     const dc = Math.sign(c1 - c0), dr = Math.sign(r1 - r0);
     let c = c0, r = r0;
     while (true) {
-      if (c >= 0 && c < COLS && r >= 0 && r < ROWS) m.cells.add(c + ',' + r);
+      if (c >= 0 && c < COLS && r >= 0 && r < ROWS) p.cells.add(c + ',' + r);
       if (c === c1 && r === r1) break;
       c += dc; r += dr;
     }
+  }
+  return p;
+}
+
+for (const m of MAPS) {
+  Object.assign(m, buildPath(m.wp)); // path 1's data lives directly on the map, unchanged from before
+  if (m.wp2) {
+    m.path2 = buildPath(m.wp2);
+    for (const c of m.path2.cells) m.cells.add(c); // one shared buildable-blocking set
   }
 }
 
@@ -632,10 +651,15 @@ function buildWave(mapIdx, w) {
   const list = [];
   let t = 0.5;
   const gap = Math.max(0.3, 1.0 - w * 0.02); // spawns tighten as waves go up
-  const push = (type, extraGap = 0) => { list.push({ type, t }); t += gap + extraGap; };
+  // Gauntlet's second lane: each spawn independently rolls which side it
+  // comes from, so a wave reads as "ships from both fronts", not a clean
+  // half-and-half split.
+  const dualLane = !!MAPS[mapIdx].wp2;
+  const pickPath = () => (dualLane && rng() < 0.5 ? 2 : 1);
+  const push = (type, extraGap = 0) => { list.push({ type, t, path: pickPath() }); t += gap + extraGap; };
   const rest = (d) => { t += d; };
   const lineOf = (type, n) => { for (let i = 0; i < n; i++) push(type); };
-  const packOf = (type, n, tight = 0.14) => { for (let k = 0; k < n; k++) { list.push({ type, t }); t += tight; } t += gap; };
+  const packOf = (type, n, tight = 0.14) => { const p = pickPath(); for (let k = 0; k < n; k++) { list.push({ type, t, path: p }); t += tight; } t += gap; };
   const mixed = (types, n) => { for (let i = 0; i < n; i++) push(types[(rng() * types.length) | 0]); };
   const avail = (type) => { const d = ENEMY_TYPES[type]; return d.debutMap < mapIdx || (d.debutMap === mapIdx && w >= d.debutWave); };
 
@@ -778,13 +802,18 @@ const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), sh
 /* ======================================================================
    ENTITY HELPERS
    ====================================================================== */
-function spawnEnemy(type) {
+// pathNum selects which lane a spawned enemy walks — 1 (the default, and
+// the only option on every map but Gauntlet) or 2 for a map's second lane.
+function enemyPath(map, pathNum) { return pathNum === 2 && map.path2 ? map.path2 : map; }
+
+function spawnEnemy(type, pathNum = 1) {
   const def = ENEMY_TYPES[type];
   const lvl = state.level;
   const hp = def.hp * hpMult(lvl);
   const shieldHits = def.shieldHits ? def.shieldHits + Math.floor(lvl / 10) : 0;
   const e = {
     type, def,
+    path: pathNum,
     s: 0,
     hp, maxHp: hp,
     speed: def.speed * speedMult(lvl),
@@ -800,7 +829,7 @@ function spawnEnemy(type) {
     dead: false,
     enraged: false,
   };
-  const p = pathPoint(currentMap(), 0);
+  const p = pathPoint(enemyPath(currentMap(), pathNum), 0);
   e.x = p.x; e.y = p.y; e.angle = p.angle;
   enemies.push(e);
   if (type === 'boss') { Sound.boss(); showBanner('⚠ DREADNOUGHT INBOUND ⚠', ENEMY_TYPES.boss.name); }
@@ -902,8 +931,9 @@ function fireTower(t, st, target) {
     }
     case 'mortar': {
       // Lead the target: aim where it will be when the shell lands.
+      // Uses the target's own lane, not always the map's primary one.
       const flight = 0.5;
-      const lead = pathPoint(currentMap(), target.s + target.speed * effSlow(target) * flight);
+      const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * flight);
       shells.push({ sx: t.x, sy: t.y, tx: lead.x, ty: lead.y, t: 0, dur: flight, dmg: st.dmg, splash: st.splash, color: ty.color });
       Sound.shotMortar();
       break;
@@ -1613,7 +1643,8 @@ function update(dt) {
 
   // spawn
   while (spawnQueue.length && spawnQueue[0].t <= state.waveTime) {
-    spawnEnemy(spawnQueue.shift().type);
+    const next = spawnQueue.shift();
+    spawnEnemy(next.type, next.path);
   }
 
   const map = currentMap();
@@ -1621,9 +1652,10 @@ function update(dt) {
   // enemies
   for (const e of enemies) {
     if (e.dead) continue;
+    const ePath = enemyPath(map, e.path);
     e.s += e.speed * effSlow(e) * dt;
-    if (e.s >= map.totalLen) { leak(e); continue; }
-    const p = pathPoint(map, e.s);
+    if (e.s >= ePath.totalLen) { leak(e); continue; }
+    const p = pathPoint(ePath, e.s);
     e.wob += dt * 6;
     e.x = p.x; e.y = p.y; e.angle = p.angle;
     // shield charges regen one at a time after 2.5s without being hit
@@ -2340,7 +2372,8 @@ function render() {
   const map = currentMap();
   drawPath(map);
   drawPortal(map);
-  drawBase(map);
+  if (map.path2) { drawPath(map.path2); drawPortal(map.path2); }
+  drawBase(map); // both lanes converge on the same base — one is enough
 
   if (state.placing != null) drawGridOverlay();
 
