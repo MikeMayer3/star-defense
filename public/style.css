@@ -257,12 +257,15 @@ canvas {
 .rail-stat.wave-stat .rail-value { color: var(--neon-cyan); text-shadow: 0 0 10px rgba(75,245,255,0.6); font-size: 1rem; }
 @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
 
-/* ============ TOP-RIGHT CORNER CONTROLS ============ */
+/* ============ BOTTOM-LEFT UTILITY COLUMN (speed/auto/pause) ============ */
+/* stacked well above the floating Start Wave button (also bottom-anchored,
+   centered) so the two never overlap despite both hugging the bottom edge */
 #topbar {
   position: fixed;
-  top: 8px; right: calc(var(--rail-w) + 8px);
+  bottom: 64px; left: calc(var(--rail-w) + 8px);
   z-index: 10;
   display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 #topbar.hidden { display: none; }
@@ -415,7 +418,7 @@ canvas {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255,255,255,0.15);
   border-radius: 10px;
-  padding: 5px 4px 4px;
+  padding: 8px 4px 7px;
   width: 100%;
   text-align: center;
   cursor: pointer;
@@ -438,8 +441,8 @@ canvas {
 }
 .tower-card.broke { opacity: 0.38; }
 .tower-card .tw-icon { display: block; width: 34px; height: 34px; margin: 0 auto; }
-.tower-card .tw-name { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 2px; }
-.tower-card .tw-cost { font-size: 0.76rem; font-weight: 800; color: var(--neon-yellow); }
+.tower-card .tw-name { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 5px; line-height: 1.2; }
+.tower-card .tw-cost { font-size: 0.76rem; font-weight: 800; color: var(--neon-yellow); margin-top: 1px; }
 
 /* ============ UPGRADE PANEL (swaps into the right rail) ============ */
 .upgrade-panel {
