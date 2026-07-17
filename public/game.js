@@ -714,7 +714,10 @@ let mapProgress = {};
 try { mapProgress = JSON.parse(localStorage.getItem(KEY_PROGRESS)) || {}; } catch (e) { mapProgress = {}; }
 function progFor(i) { return mapProgress[i] || (mapProgress[i] = { beaten: false, best: 0 }); }
 function saveProgress() { try { localStorage.setItem(KEY_PROGRESS, JSON.stringify(mapProgress)); } catch (e) { /* ignore */ } }
-function mapUnlocked(i) { return i === 0 || !!(mapProgress[i - 1] && mapProgress[i - 1].beaten); }
+// TEMP (testing): all maps unlocked regardless of progress. Flip to false
+// to restore normal beat-the-previous-map-to-unlock progression.
+const UNLOCK_ALL_MAPS = true;
+function mapUnlocked(i) { return UNLOCK_ALL_MAPS || i === 0 || !!(mapProgress[i - 1] && mapProgress[i - 1].beaten); }
 function mapsBeaten() { return MAPS.filter((m, i) => mapProgress[i] && mapProgress[i].beaten).length; }
 
 function saveMapCheckpoint() {
@@ -1149,8 +1152,7 @@ let cardDrag = null; // { type, pointerId, startX, startY, moved }
 
 function showDragGhost(typeIndex, x, y) {
   const ty = TOWER_TYPES[typeIndex];
-  dragGhostEl.textContent = ty.icon;
-  dragGhostEl.style.color = ty.color;
+  drawShopIcon(dragGhostEl, ty);
   dragGhostEl.style.left = x + 'px';
   dragGhostEl.style.top = y + 'px';
   dragGhostEl.classList.remove('hidden');
@@ -1170,9 +1172,10 @@ function buildShopCards() {
     card.style.setProperty('--tc-glow', ty.glow);
     card.dataset.index = i;
     card.innerHTML =
-      '<div class="tw-icon">' + ty.icon + '</div>' +
+      '<canvas class="tw-icon" width="56" height="56"></canvas>' +
       '<div class="tw-name">' + ty.name + '</div>' +
       '<div class="tw-cost">$' + ty.cost + '</div>';
+    drawShopIcon(card.querySelector('.tw-icon'), ty);
 
     card.addEventListener('pointerdown', (ev) => {
       if (state.mode !== 'playing' || ev.button > 0) return;
@@ -1188,7 +1191,7 @@ function buildShopCards() {
       closeUpgradePanel();
       setPlacing(i);
       showDragGhost(i, ev.clientX, ev.clientY);
-    });
+    }, { passive: false }); // must be non-passive or preventDefault() above is silently ignored
     card.addEventListener('pointermove', (ev) => {
       if (!cardDrag || ev.pointerId !== cardDrag.pointerId) return;
       if (Math.hypot(ev.clientX - cardDrag.startX, ev.clientY - cardDrag.startY) > 6) cardDrag.moved = true;
@@ -1217,6 +1220,9 @@ function buildShopCards() {
       hideDragGhost();
       setPlacing(null);
     });
+    // long-press must never open the native context menu — it would
+    // hijack the touch sequence mid-drag (see the global handler in BOOT)
+    card.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
     towerCardsEl.appendChild(card);
   });
@@ -1650,19 +1656,22 @@ function update(dt) {
     if (tty.id === 'beacon') continue; // pure support — never targets or fires
     t.cool -= dt;
     const st = towerStats(t);
-    // Command Beacon aura: stacks with every beacon in range, boosting this
-    // tower's damage and fire rate for the shot(s) it's about to take.
-    // t.buffed just records whether any applied, for drawTower's benefit —
+    // Command Beacon aura: deliberately does NOT stack — only the single
+    // strongest beacon in range applies, so clustering several beacons on
+    // one chokepoint tower can't compound into an easy power spike.
+    // t.buffed just records whether one applied, for drawTower's benefit —
     // otherwise a buffed tower looks no different from an unbuffed one.
     t.buffed = false;
+    let bestBuffDmg = 0, bestBuffRate = 0;
     for (const b of beacons) {
       const bst = towerStats(b);
-      if (Math.hypot(b.x - t.x, b.y - t.y) <= bst.range) {
-        st.dmg *= 1 + bst.buffDmg;
-        st.rate *= 1 + bst.buffRate;
-        t.buffed = true;
-      }
+      if (Math.hypot(b.x - t.x, b.y - t.y) > bst.range) continue;
+      if (bst.buffDmg > bestBuffDmg) bestBuffDmg = bst.buffDmg;
+      if (bst.buffRate > bestBuffRate) bestBuffRate = bst.buffRate;
+      t.buffed = true;
     }
+    st.dmg *= 1 + bestBuffDmg;
+    st.rate *= 1 + bestBuffRate;
     const seesCloaked = tty.id === 'frost';
     let best = null, bestS = -1;
     for (const e of enemies) {
@@ -1945,6 +1954,109 @@ function drawGridOverlay() {
   }
 }
 
+// Draws a turret's identifying shape — no pad, no aim rotation, no level
+// pips — into context g, centered at (0,0) at scale s. Shared by the
+// on-map tower (drawTower) and the shop-card/drag-ghost icons
+// (drawShopIcon) so the two can never visually drift apart: fix a shape
+// once here and every place it appears updates together.
+function drawTurretShape(g, ty, s, blur = 10) {
+  g.shadowColor = ty.color;
+  g.shadowBlur = blur; // defaults to the on-map towers' original fixed value;
+  g.fillStyle = ty.color; // drawShopIcon passes a smaller one for its canvas
+  switch (ty.id) {
+    case 'blaster':
+      // compact blaster pistol: blocky body, short barrel, bright muzzle tip
+      // (kept inside the s*0.82 pad radius so it doesn't poke past the edge)
+      roundRect(-s * 0.32, -s * 0.26, s * 0.5, s * 0.52, s * 0.1, g);
+      g.fill();
+      g.fillRect(s * 0.1, -s * 0.1, s * 0.6, s * 0.2);
+      circle(s * 0.72, 0, s * 0.08, '#ffffff', g);
+      break;
+    case 'frost':
+      // snowflake: six-pointed star with an icy core
+      star(6, s * 0.48, s * 0.16, ty.color, g);
+      circle(0, 0, s * 0.16, '#ffffff', g);
+      break;
+    case 'gatling':
+      // ring of stubby barrels around a hub — reads as a spinning cluster
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        g.save();
+        g.translate(Math.cos(a) * s * 0.3, Math.sin(a) * s * 0.3);
+        g.rotate(a);
+        g.fillStyle = ty.color;
+        g.fillRect(0, -s * 0.07, s * 0.34, s * 0.14);
+        g.restore();
+      }
+      circle(0, 0, s * 0.24, ty.color, g);
+      break;
+    case 'mortar': {
+      // wide muzzle bore with a burst of spikes around the rim
+      circle(0, 0, s * 0.44, ty.color, g);
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        g.save();
+        g.translate(Math.cos(a) * s * 0.44, Math.sin(a) * s * 0.44);
+        g.rotate(a);
+        poly(3, s * 0.13, '#ffe74b', g);
+        g.restore();
+      }
+      circle(0, 0, s * 0.2, '#0a0e28', g);
+      break;
+    }
+    case 'tesla':
+      // jagged lightning bolt with a bright spark core
+      lightningBolt(s * 0.55, ty.color, g);
+      circle(s * 0.05, 0, s * 0.12, '#ffffff', g);
+      break;
+    case 'rail':
+      // long pierce barrel, plus a small bullseye scope mounted above it —
+      // kept clear of the barrel silhouette so it reads as a scope/reticle
+      // rather than a key (a ring beside or around the barrel reads as one).
+      // Shortened to stay inside the s*0.82 pad radius.
+      g.fillStyle = ty.color;
+      g.fillRect(-s * 0.15, -s * 0.09, s * 0.85, s * 0.18);
+      g.fillRect(s * 0.55, -s * 0.16, s * 0.2, s * 0.32);
+      ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color, g);
+      circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff', g);
+      break;
+    case 'beacon': {
+      // command beacon: a core with three relay nodes slowly orbiting it,
+      // always broadcasting — never aims, so this spins independently of
+      // the tower's (unused) aim angle
+      const spin = performance.now() / 900;
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i / 3) * Math.PI * 2;
+        const nx = Math.cos(a) * s * 0.42, ny = Math.sin(a) * s * 0.42;
+        g.strokeStyle = ty.color;
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.moveTo(0, 0);
+        g.lineTo(nx, ny);
+        g.stroke();
+        circle(nx, ny, s * 0.1, ty.color, g);
+      }
+      circle(0, 0, s * 0.22, ty.color, g);
+      circle(0, 0, s * 0.1, '#ffffff', g);
+      break;
+    }
+  }
+}
+
+// Renders a turret's shape into a small dedicated <canvas> — used for the
+// shop cards and the drag ghost, so what you see there is the same shape
+// and color as the tower you actually get on the board, not an unrelated
+// emoji locked to whatever color the OS's emoji font happens to draw it in.
+function drawShopIcon(canvasEl, ty) {
+  const g = canvasEl.getContext('2d');
+  const w = canvasEl.width, h = canvasEl.height;
+  g.clearRect(0, 0, w, h);
+  g.save();
+  g.translate(w / 2, h / 2);
+  drawTurretShape(g, ty, Math.min(w, h) * 0.42, 5);
+  g.restore();
+}
+
 function drawTower(t) {
   const ty = TOWER_TYPES[t.type];
   const x = px(t.x), y = py(t.y);
@@ -1974,85 +2086,7 @@ function drawTower(t) {
   // turret (rotates toward target)
   ctx.translate(x, y);
   ctx.rotate(t.angle);
-  ctx.shadowColor = ty.color;
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = ty.color;
-  switch (ty.id) {
-    case 'blaster':
-      // compact blaster pistol: blocky body, short barrel, bright muzzle tip
-      // (kept inside the s*0.82 pad radius so it doesn't poke past the edge)
-      roundRect(-s * 0.32, -s * 0.26, s * 0.5, s * 0.52, s * 0.1);
-      ctx.fill();
-      ctx.fillRect(s * 0.1, -s * 0.1, s * 0.6, s * 0.2);
-      circle(s * 0.72, 0, s * 0.08, '#ffffff');
-      break;
-    case 'frost':
-      // snowflake: six-pointed star with an icy core
-      star(6, s * 0.48, s * 0.16, ty.color);
-      circle(0, 0, s * 0.16, '#ffffff');
-      break;
-    case 'gatling':
-      // ring of stubby barrels around a hub — reads as a spinning cluster
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2;
-        ctx.save();
-        ctx.translate(Math.cos(a) * s * 0.3, Math.sin(a) * s * 0.3);
-        ctx.rotate(a);
-        ctx.fillRect(0, -s * 0.07, s * 0.34, s * 0.14);
-        ctx.restore();
-      }
-      circle(0, 0, s * 0.24, ty.color);
-      break;
-    case 'mortar': {
-      // wide muzzle bore with a burst of spikes around the rim
-      circle(0, 0, s * 0.44, ty.color);
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-        ctx.save();
-        ctx.translate(Math.cos(a) * s * 0.44, Math.sin(a) * s * 0.44);
-        ctx.rotate(a);
-        poly(3, s * 0.13, '#ffe74b');
-        ctx.restore();
-      }
-      circle(0, 0, s * 0.2, '#0a0e28');
-      break;
-    }
-    case 'tesla':
-      // jagged lightning bolt with a bright spark core
-      lightningBolt(s * 0.55, ty.color);
-      circle(s * 0.05, 0, s * 0.12, '#ffffff');
-      break;
-    case 'rail':
-      // long pierce barrel, plus a small bullseye scope mounted above it —
-      // kept clear of the barrel silhouette so it reads as a scope/reticle
-      // rather than a key (a ring beside or around the barrel reads as one).
-      // Shortened to stay inside the s*0.82 pad radius.
-      ctx.fillRect(-s * 0.15, -s * 0.09, s * 0.85, s * 0.18);
-      ctx.fillRect(s * 0.55, -s * 0.16, s * 0.2, s * 0.32);
-      ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color);
-      circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff');
-      break;
-    case 'beacon': {
-      // command beacon: a core with three relay nodes slowly orbiting it,
-      // always broadcasting — never aims, so this spins independently of
-      // the tower's (unused) aim angle
-      const spin = performance.now() / 900;
-      for (let i = 0; i < 3; i++) {
-        const a = spin + (i / 3) * Math.PI * 2;
-        const nx = Math.cos(a) * s * 0.42, ny = Math.sin(a) * s * 0.42;
-        ctx.strokeStyle = ty.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(nx, ny);
-        ctx.stroke();
-        circle(nx, ny, s * 0.1, ty.color);
-      }
-      circle(0, 0, s * 0.22, ty.color);
-      circle(0, 0, s * 0.1, '#ffffff');
-      break;
-    }
-  }
+  drawTurretShape(ctx, ty, s);
   ctx.restore();
 
   // frost and the command beacon are auras, not aimed guns — always show
@@ -2104,73 +2138,78 @@ function drawTower(t) {
   }
 }
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+// All shape helpers below take an optional trailing context `g`, defaulting
+// to the main game canvas — this lets drawTurretShape() reuse the exact
+// same drawing code for a small offscreen canvas (shop card icons, the
+// drag ghost) as it does for the on-map tower, so the two can never
+// visually drift apart again.
+function roundRect(x, y, w, h, r, g = ctx) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
 }
 
-function circle(x, y, r, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
+function circle(x, y, r, color, g = ctx) {
+  g.fillStyle = color;
+  g.beginPath();
+  g.arc(x, y, r, 0, Math.PI * 2);
+  g.fill();
 }
 
-function poly(n, r, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
+function poly(n, r, color, g = ctx) {
+  g.fillStyle = color;
+  g.beginPath();
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
-    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    if (i === 0) g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
   }
-  ctx.closePath();
-  ctx.fill();
+  g.closePath();
+  g.fill();
 }
 
-function star(n, rOuter, rInner, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
+function star(n, rOuter, rInner, color, g = ctx) {
+  g.fillStyle = color;
+  g.beginPath();
   for (let i = 0; i < n * 2; i++) {
     const r = i % 2 === 0 ? rOuter : rInner;
     const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
     const px_ = Math.cos(a) * r, py_ = Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(px_, py_); else ctx.lineTo(px_, py_);
+    if (i === 0) g.moveTo(px_, py_); else g.lineTo(px_, py_);
   }
-  ctx.closePath();
-  ctx.fill();
+  g.closePath();
+  g.fill();
 }
 
 // donut ring — used for the rail cannon's targeting-reticle hub
-function ringDonut(x, y, rOuter, rInner, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x, y, rOuter, 0, Math.PI * 2);
-  ctx.arc(x, y, rInner, 0, Math.PI * 2, true);
-  ctx.fill('evenodd');
+function ringDonut(x, y, rOuter, rInner, color, g = ctx) {
+  g.fillStyle = color;
+  g.beginPath();
+  g.arc(x, y, rOuter, 0, Math.PI * 2);
+  g.arc(x, y, rInner, 0, Math.PI * 2, true);
+  g.fill('evenodd');
 }
 
 // jagged flash-bolt silhouette (long axis along local +x) for the tesla coil.
 // The pinched waist near the origin (vs. the wide arm tips) is what reads as
 // a lightning zigzag instead of a smooth dart once the glow blur softens it.
-function lightningBolt(r, color) {
+function lightningBolt(r, color, g = ctx) {
   const pts = [
     [0.6, -0.1], [0.05, -0.55], [0.15, -0.08],
     [-0.6, 0.1], [-0.05, 0.55], [-0.15, 0.08],
   ];
-  ctx.fillStyle = color;
-  ctx.beginPath();
+  g.fillStyle = color;
+  g.beginPath();
   pts.forEach(([px_, py_], i) => {
     const X = px_ * r, Y = py_ * r;
-    if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+    if (i === 0) g.moveTo(X, Y); else g.lineTo(X, Y);
   });
-  ctx.closePath();
-  ctx.fill();
+  g.closePath();
+  g.fill();
 }
 
 function drawEnemy(e) {
@@ -2425,6 +2464,13 @@ document.addEventListener('touchend', (ev) => {
   if (now - lastTouchEndAt < 300) ev.preventDefault();
   lastTouchEndAt = now;
 }, { passive: false });
+
+// Never show the native long-press context menu anywhere in the app — on
+// a real phone this was hijacking the tower-card drag gesture entirely
+// (the OS's own menu steals the touch sequence before our drag code sees
+// any movement). The canvas has its own contextmenu handler with extra
+// cancel-placement logic; this is the blanket fallback for everything else.
+document.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
 // PWA: offline cache + installability (required for the Android TWA wrap)
 if ('serviceWorker' in navigator) {

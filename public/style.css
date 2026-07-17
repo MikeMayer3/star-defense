@@ -30,6 +30,10 @@ html, body {
      backs up the viewport meta tag, which some Android builds ignore */
   touch-action: none;
   -ms-touch-action: none;
+  /* no iOS/Android long-press callout (Save Image/Share/Copy) anywhere —
+     without this, holding a tower card to start a drag can get hijacked
+     by the OS's own long-press menu before our drag code sees the move */
+  -webkit-touch-callout: none;
 }
 
 canvas {
@@ -213,7 +217,8 @@ canvas {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding-top: 14px;
+  /* safe-area-aware so it clears a rounded screen corner or camera cutout */
+  padding-top: max(14px, env(safe-area-inset-top));
   background: linear-gradient(to right, rgba(4,5,20,0.92) 0%, rgba(4,5,20,0.6) 75%, rgba(4,5,20,0) 100%);
 }
 #leftRail.hidden { display: none; }
@@ -387,7 +392,9 @@ canvas {
   top: 0; right: 0; bottom: 0;
   z-index: 10;
   width: var(--rail-w);
-  padding: 10px 6px;
+  /* safe-area-aware so the top card clears a rounded screen corner or
+     camera cutout instead of getting visually clipped by it */
+  padding: max(10px, env(safe-area-inset-top)) 6px max(10px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   background: linear-gradient(to left, rgba(4,5,20,0.92) 0%, rgba(4,5,20,0.6) 75%, rgba(4,5,20,0) 100%);
@@ -397,6 +404,8 @@ canvas {
 .tower-cards {
   display: flex;
   flex-direction: column;
+  justify-content: center; /* center the card stack instead of stacking from
+    the top, which left dead space at the bottom */
   gap: 4px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -413,6 +422,13 @@ canvas {
   transition: all 0.15s ease;
   backdrop-filter: blur(3px);
   flex-shrink: 0;
+  /* redundant with the global rules but kept directly on the draggable
+     element too — this is the one that must not get hijacked by a
+     native long-press/select gesture mid-drag */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .tower-card:hover { transform: translateY(-2px); border-color: var(--tc, var(--neon-cyan)); }
 .tower-card.selected {
@@ -421,7 +437,7 @@ canvas {
   background: rgba(20, 26, 60, 0.9);
 }
 .tower-card.broke { opacity: 0.38; }
-.tower-card .tw-icon { font-size: 1.05rem; line-height: 1.05; filter: drop-shadow(0 0 6px var(--tc, var(--neon-cyan))); }
+.tower-card .tw-icon { display: block; width: 22px; height: 22px; margin: 0 auto; }
 .tower-card .tw-name { font-size: 0.52rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 1px; }
 .tower-card .tw-cost { font-size: 0.64rem; font-weight: 800; color: var(--neon-yellow); }
 
@@ -468,8 +484,10 @@ canvas {
   z-index: 21;
   pointer-events: none;
   transform: translate(-50%, -140%);
-  font-size: 1.9rem;
-  filter: drop-shadow(0 0 10px currentColor);
+  width: 34px;
+  height: 34px;
+  /* the glow is baked into the canvas drawing itself (shadowBlur), not a
+     CSS filter, since this now draws the real turret shape, not emoji text */
 }
 #dragGhost.hidden { display: none; }
 

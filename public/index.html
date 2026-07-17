@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover" />
 <title>Star Defense — Neon Tower Defense</title>
 <meta name="theme-color" content="#05061a" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
@@ -86,7 +86,7 @@
 <button id="waveBtn" class="wave-btn">▶ START WAVE</button>
 
 <!-- follows the finger/cursor while dragging a tower card onto the board -->
-<div id="dragGhost" class="hidden"></div>
+<canvas id="dragGhost" class="hidden" width="56" height="56"></canvas>
 
 <!-- ============ RIGHT RAIL: tower shop (in-game) ============ -->
 <div id="shop" class="hidden">
