@@ -294,9 +294,46 @@ function initStars() {
 // Planet + rings: fixed at a corner of the viewport — at this "distance"
 // there's no perceptible drift over a play session, so it doesn't scroll
 // with the stars (avoids a single unique object popping/teleporting on wrap).
+// Each map gets its own planet + galaxy: different position, body color,
+// and ring/glow tint, so the backdrop itself signals which sector you're
+// in. On the main menu this previews whichever map card is highlighted;
+// in-game it reflects the map actually being played.
+const SECTOR_BACKDROPS = [
+  { // Corridor — the original blue ringed planet / gold-violet galaxy
+    planetPos: [0.87, 0.16], planetColor: '#5d7ea8',
+    ringColor: 'rgba(190, 210, 255,', ringAccent: 'rgba(255, 224, 190,',
+    galaxyPos: [0.13, 0.74], galaxyCore: 'rgba(255, 228, 205,', galaxyMid: 'rgba(200, 165, 255,', galaxyArm: 'rgba(190, 160, 255,',
+  },
+  { // Serpent — rusty desert world, cyan-white galaxy
+    planetPos: [0.15, 0.18], planetColor: '#b8663f',
+    ringColor: 'rgba(255, 200, 150,', ringAccent: 'rgba(255, 255, 220,',
+    galaxyPos: [0.85, 0.78], galaxyCore: 'rgba(220, 245, 255,', galaxyMid: 'rgba(140, 210, 255,', galaxyArm: 'rgba(150, 210, 255,',
+  },
+  { // Switchback — teal gas giant, magenta nebula-galaxy
+    planetPos: [0.85, 0.78], planetColor: '#3f9e8a',
+    ringColor: 'rgba(160, 255, 230,', ringAccent: 'rgba(255, 255, 255,',
+    galaxyPos: [0.13, 0.18], galaxyCore: 'rgba(255, 220, 245,', galaxyMid: 'rgba(255, 140, 220,', galaxyArm: 'rgba(255, 150, 225,',
+  },
+  { // Zigzag — icy planet, ember-orange galaxy
+    planetPos: [0.5, 0.14], planetColor: '#a8c8e8',
+    ringColor: 'rgba(220, 240, 255,', ringAccent: 'rgba(150, 200, 255,',
+    galaxyPos: [0.8, 0.82], galaxyCore: 'rgba(255, 230, 190,', galaxyMid: 'rgba(255, 140, 90,', galaxyArm: 'rgba(255, 150, 100,',
+  },
+  { // Gauntlet — crimson dying world, deep-violet galaxy for the finale
+    planetPos: [0.86, 0.8], planetColor: '#8a3a4a',
+    ringColor: 'rgba(255, 120, 140,', ringAccent: 'rgba(255, 200, 80,',
+    galaxyPos: [0.13, 0.16], galaxyCore: 'rgba(255, 210, 220,', galaxyMid: 'rgba(150, 80, 200,', galaxyArm: 'rgba(170, 90, 220,',
+  },
+];
+function currentBackdrop() {
+  const idx = state.mode === 'menu' ? state.mapSelect : state.mapIndex;
+  return SECTOR_BACKDROPS[idx] || SECTOR_BACKDROPS[0];
+}
+
 function drawPlanet() {
+  const b = currentBackdrop();
   const r = Math.min(W, H) * 0.09;
-  const cx = W * 0.87, cy = H * 0.16;
+  const cx = W * b.planetPos[0], cy = H * b.planetPos[1];
   const tilt = -0.34;
   const ringRx = r * 2.05, ringRy = r * 0.52;
 
@@ -304,17 +341,17 @@ function drawPlanet() {
   bgCtx.translate(cx, cy);
   bgCtx.rotate(tilt);
   // back half of the rings, behind the planet body
-  bgCtx.strokeStyle = 'rgba(190, 210, 255, 0.32)';
+  bgCtx.strokeStyle = b.ringColor + '0.32)';
   bgCtx.lineWidth = r * 0.13;
   bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx, ringRy, 0, Math.PI, Math.PI * 2); bgCtx.stroke();
-  bgCtx.strokeStyle = 'rgba(255, 224, 190, 0.22)';
+  bgCtx.strokeStyle = b.ringAccent + '0.22)';
   bgCtx.lineWidth = r * 0.05;
   bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx * 0.8, ringRy * 0.8, 0, Math.PI, Math.PI * 2); bgCtx.stroke();
   bgCtx.restore();
 
   // planet body — flat fill with a clipped darker crescent for a terminator
   bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2);
-  bgCtx.fillStyle = '#5d7ea8';
+  bgCtx.fillStyle = b.planetColor;
   bgCtx.fill();
   bgCtx.save();
   bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.clip();
@@ -332,25 +369,26 @@ function drawPlanet() {
   bgCtx.translate(cx, cy);
   bgCtx.rotate(tilt);
   // front half of the rings, over the planet body
-  bgCtx.strokeStyle = 'rgba(190, 210, 255, 0.45)';
+  bgCtx.strokeStyle = b.ringColor + '0.45)';
   bgCtx.lineWidth = r * 0.13;
   bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx, ringRy, 0, 0, Math.PI); bgCtx.stroke();
-  bgCtx.strokeStyle = 'rgba(255, 224, 190, 0.35)';
+  bgCtx.strokeStyle = b.ringAccent + '0.35)';
   bgCtx.lineWidth = r * 0.05;
   bgCtx.beginPath(); bgCtx.ellipse(0, 0, ringRx * 0.8, ringRy * 0.8, 0, 0, Math.PI); bgCtx.stroke();
   bgCtx.restore();
 }
 
 // Distant spiral galaxy — a soft glow core with a couple of faint tilted
-// arm smudges. Also fixed in place, same reasoning as the planet.
+// arm smudges. Also fixed in place per map, same reasoning as the planet.
 function drawGalaxy() {
-  const cx = W * 0.13, cy = H * 0.74;
+  const b = currentBackdrop();
+  const cx = W * b.galaxyPos[0], cy = H * b.galaxyPos[1];
   const r = Math.min(W, H) * 0.24;
   const g = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  g.addColorStop(0, 'rgba(255, 228, 205, 0.5)');
-  g.addColorStop(0.15, 'rgba(200, 165, 255, 0.3)');
-  g.addColorStop(0.5, 'rgba(120, 95, 200, 0.12)');
-  g.addColorStop(1, 'rgba(80, 60, 160, 0)');
+  g.addColorStop(0, b.galaxyCore + '0.5)');
+  g.addColorStop(0.15, b.galaxyMid + '0.3)');
+  g.addColorStop(0.5, b.galaxyMid + '0.12)');
+  g.addColorStop(1, b.galaxyMid + '0)');
   bgCtx.fillStyle = g;
   bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.fill();
 
@@ -360,15 +398,15 @@ function drawGalaxy() {
     bgCtx.rotate(rot);
     bgCtx.beginPath();
     bgCtx.ellipse(r * 0.15, 0, r * 0.85, r * 0.2, 0, 0, Math.PI * 2);
-    bgCtx.fillStyle = 'rgba(190, 160, 255, 0.06)';
+    bgCtx.fillStyle = b.galaxyArm + '0.06)';
     bgCtx.fill();
     bgCtx.rotate(-rot);
   });
   bgCtx.restore();
 
   bgCtx.beginPath(); bgCtx.arc(cx, cy, r * 0.07, 0, Math.PI * 2);
-  bgCtx.fillStyle = 'rgba(255, 242, 224, 0.85)';
-  bgCtx.shadowColor = 'rgba(255, 222, 190, 0.8)';
+  bgCtx.fillStyle = b.galaxyCore + '0.85)';
+  bgCtx.shadowColor = b.galaxyCore + '0.8)';
   bgCtx.shadowBlur = r * 0.22;
   bgCtx.fill();
   bgCtx.shadowBlur = 0;
@@ -499,11 +537,33 @@ function buildPath(wp) {
   return p;
 }
 
+// A dual-spawn map's two lanes share a trailing run of identical waypoints
+// (the merged trunk). Drawing each full lane separately would stroke that
+// shared stretch twice, doubling its glow and chevrons where they meet.
+// This splits the two lanes into their unique entries plus the shared
+// trunk exactly once, purely for rendering — movement still uses each
+// lane's full waypoint list (m.wp / m.wp2), unaffected.
+function splitSharedTrunk(wpA, wpB) {
+  let n = 0;
+  while (
+    n < wpA.length && n < wpB.length &&
+    wpA[wpA.length - 1 - n][0] === wpB[wpB.length - 1 - n][0] &&
+    wpA[wpA.length - 1 - n][1] === wpB[wpB.length - 1 - n][1]
+  ) n++;
+  if (n < 2) return [wpA, wpB]; // no shared segment worth splitting out
+  const trunk = wpA.slice(wpA.length - n);
+  const entryA = wpA.slice(0, wpA.length - n + 1); // ends exactly at the junction, so it still connects visually
+  const entryB = wpB.slice(0, wpB.length - n + 1);
+  return [entryA, entryB, trunk];
+}
+
 for (const m of MAPS) {
   Object.assign(m, buildPath(m.wp)); // path 1's data lives directly on the map, unchanged from before
+  m.renderPaths = [buildPath(m.wp)];
   if (m.wp2) {
     m.path2 = buildPath(m.wp2);
     for (const c of m.path2.cells) m.cells.add(c); // one shared buildable-blocking set
+    m.renderPaths = splitSharedTrunk(m.wp, m.wp2).map(buildPath);
   }
 }
 
@@ -550,6 +610,11 @@ const TOWER_TYPES = [
   {
     id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
     desc: 'chains between ships', cost: 220, dmg: 24, rate: 1.1, range: 2.7, upCost: [175, 340],
+    // TEMP: hidden from the shop for now. Left in place at its existing
+    // array index (not deleted) so t.type on any already-placed/saved
+    // tower and every other tower's index stay stable — only
+    // buildShopCards() below skips rendering a card for it.
+    hidden: true,
   },
   {
     id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
@@ -1196,13 +1261,14 @@ function hideDragGhost() { dragGhostEl.classList.add('hidden'); }
 function buildShopCards() {
   towerCardsEl.innerHTML = '';
   TOWER_TYPES.forEach((ty, i) => {
+    if (ty.hidden) return; // e.g. Tesla, temporarily — see its TOWER_TYPES entry
     const card = document.createElement('div');
     card.className = 'tower-card';
     card.style.setProperty('--tc', ty.color);
     card.style.setProperty('--tc-glow', ty.glow);
     card.dataset.index = i;
     card.innerHTML =
-      '<canvas class="tw-icon" width="56" height="56"></canvas>' +
+      '<canvas class="tw-icon" width="72" height="72"></canvas>' +
       '<div class="tw-name">' + ty.name + '</div>' +
       '<div class="tw-cost">$' + ty.cost + '</div>';
     drawShopIcon(card.querySelector('.tw-icon'), ty);
@@ -1261,12 +1327,14 @@ function buildShopCards() {
 function setPlacing(i) {
   state.placing = i;
   state.selected = null;
-  [...towerCardsEl.children].forEach((c, k) => c.classList.toggle('selected', k === i));
+  // dataset.index (the tower's true TOWER_TYPES index), not DOM child
+  // position — those diverge as soon as any card is skipped (hidden)
+  [...towerCardsEl.children].forEach((c) => c.classList.toggle('selected', Number(c.dataset.index) === i));
 }
 
 function refreshShopAfford() {
-  [...towerCardsEl.children].forEach((c, k) => {
-    c.classList.toggle('broke', state.money < TOWER_TYPES[k].cost);
+  [...towerCardsEl.children].forEach((c) => {
+    c.classList.toggle('broke', state.money < TOWER_TYPES[Number(c.dataset.index)].cost);
   });
 }
 
@@ -1404,7 +1472,7 @@ window.addEventListener('keydown', (ev) => {
   if (state.mode !== 'playing') return;
   if (ev.key === ' ') { ev.preventDefault(); startWave(); }
   const n = parseInt(ev.key, 10);
-  if (n >= 1 && n <= TOWER_TYPES.length) {
+  if (n >= 1 && n <= TOWER_TYPES.length && !TOWER_TYPES[n - 1].hidden) {
     closeUpgradePanel();
     if (state.money >= TOWER_TYPES[n - 1].cost) setPlacing(n - 1); else Sound.invalid();
   }
@@ -2370,9 +2438,11 @@ function render() {
   if (state.mode === 'menu') return;
 
   const map = currentMap();
-  drawPath(map);
+  // renderPaths already dedupes a dual-spawn map's shared trunk (see
+  // splitSharedTrunk) so it's stroked once, not once per lane
+  for (const p of map.renderPaths) drawPath(p);
   drawPortal(map);
-  if (map.path2) { drawPath(map.path2); drawPortal(map.path2); }
+  if (map.path2) drawPortal(map.path2); // each lane's own mothership — no overlap concern here
   drawBase(map); // both lanes converge on the same base — one is enough
 
   if (state.placing != null) drawGridOverlay();

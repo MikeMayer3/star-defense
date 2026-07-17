@@ -406,7 +406,7 @@ canvas {
   flex-direction: column;
   justify-content: center; /* center the card stack instead of stacking from
     the top, which left dead space at the bottom */
-  gap: 4px;
+  gap: 6px;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
@@ -414,8 +414,8 @@ canvas {
 .tower-card {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255,255,255,0.15);
-  border-radius: 9px;
-  padding: 3px 3px 2px;
+  border-radius: 10px;
+  padding: 5px 4px 4px;
   width: 100%;
   text-align: center;
   cursor: pointer;
@@ -437,9 +437,9 @@ canvas {
   background: rgba(20, 26, 60, 0.9);
 }
 .tower-card.broke { opacity: 0.38; }
-.tower-card .tw-icon { display: block; width: 22px; height: 22px; margin: 0 auto; }
-.tower-card .tw-name { font-size: 0.52rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 1px; }
-.tower-card .tw-cost { font-size: 0.64rem; font-weight: 800; color: var(--neon-yellow); }
+.tower-card .tw-icon { display: block; width: 34px; height: 34px; margin: 0 auto; }
+.tower-card .tw-name { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1px; color: #dceaff; margin-top: 2px; }
+.tower-card .tw-cost { font-size: 0.76rem; font-weight: 800; color: var(--neon-yellow); }
 
 /* ============ UPGRADE PANEL (swaps into the right rail) ============ */
 .upgrade-panel {
@@ -484,8 +484,8 @@ canvas {
   z-index: 21;
   pointer-events: none;
   transform: translate(-50%, -140%);
-  width: 34px;
-  height: 34px;
+  width: 46px;
+  height: 46px;
   /* the glow is baked into the canvas drawing itself (shadowBlur), not a
      CSS filter, since this now draws the real turret shape, not emoji text */
 }
