@@ -298,26 +298,28 @@ function initStars() {
 // and ring/glow tint, so the backdrop itself signals which sector you're
 // in. On the main menu this previews whichever map card is highlighted;
 // in-game it reflects the map actually being played.
+// Order matches MAPS above (reordered to match difficulty) — each entry
+// stays paired with the map it was themed for by name, not by old slot.
 const SECTOR_BACKDROPS = [
-  { // Corridor — the original blue ringed planet / gold-violet galaxy
-    planetPos: [0.87, 0.16], planetColor: '#5d7ea8',
-    ringColor: 'rgba(190, 210, 255,', ringAccent: 'rgba(255, 224, 190,',
-    galaxyPos: [0.13, 0.74], galaxyCore: 'rgba(255, 228, 205,', galaxyMid: 'rgba(200, 165, 255,', galaxyArm: 'rgba(190, 160, 255,',
-  },
-  { // Serpent — rusty desert world, cyan-white galaxy
-    planetPos: [0.15, 0.18], planetColor: '#b8663f',
-    ringColor: 'rgba(255, 200, 150,', ringAccent: 'rgba(255, 255, 220,',
-    galaxyPos: [0.85, 0.78], galaxyCore: 'rgba(220, 245, 255,', galaxyMid: 'rgba(140, 210, 255,', galaxyArm: 'rgba(150, 210, 255,',
+  { // Zigzag — icy planet, ember-orange galaxy
+    planetPos: [0.5, 0.14], planetColor: '#a8c8e8',
+    ringColor: 'rgba(220, 240, 255,', ringAccent: 'rgba(150, 200, 255,',
+    galaxyPos: [0.8, 0.82], galaxyCore: 'rgba(255, 230, 190,', galaxyMid: 'rgba(255, 140, 90,', galaxyArm: 'rgba(255, 150, 100,',
   },
   { // Switchback — teal gas giant, magenta nebula-galaxy
     planetPos: [0.85, 0.78], planetColor: '#3f9e8a',
     ringColor: 'rgba(160, 255, 230,', ringAccent: 'rgba(255, 255, 255,',
     galaxyPos: [0.13, 0.18], galaxyCore: 'rgba(255, 220, 245,', galaxyMid: 'rgba(255, 140, 220,', galaxyArm: 'rgba(255, 150, 225,',
   },
-  { // Zigzag — icy planet, ember-orange galaxy
-    planetPos: [0.5, 0.14], planetColor: '#a8c8e8',
-    ringColor: 'rgba(220, 240, 255,', ringAccent: 'rgba(150, 200, 255,',
-    galaxyPos: [0.8, 0.82], galaxyCore: 'rgba(255, 230, 190,', galaxyMid: 'rgba(255, 140, 90,', galaxyArm: 'rgba(255, 150, 100,',
+  { // Serpent — rusty desert world, cyan-white galaxy
+    planetPos: [0.15, 0.18], planetColor: '#b8663f',
+    ringColor: 'rgba(255, 200, 150,', ringAccent: 'rgba(255, 255, 220,',
+    galaxyPos: [0.85, 0.78], galaxyCore: 'rgba(220, 245, 255,', galaxyMid: 'rgba(140, 210, 255,', galaxyArm: 'rgba(150, 210, 255,',
+  },
+  { // Corridor — the original blue ringed planet / gold-violet galaxy
+    planetPos: [0.87, 0.16], planetColor: '#5d7ea8',
+    ringColor: 'rgba(190, 210, 255,', ringAccent: 'rgba(255, 224, 190,',
+    galaxyPos: [0.13, 0.74], galaxyCore: 'rgba(255, 228, 205,', galaxyMid: 'rgba(200, 165, 255,', galaxyArm: 'rgba(190, 160, 255,',
   },
   { // Gauntlet — crimson dying world, deep-violet galaxy for the finale
     planetPos: [0.86, 0.8], planetColor: '#8a3a4a',
@@ -501,11 +503,16 @@ function drawStarfield(dt) {
 // map (wp2): two independent lanes enter from opposite sides and share a
 // final trunk into the same base — see buildPath()/render() below for how
 // a second path piggybacks on all the normal single-path machinery.
+// Ordered easiest to hardest layout — Corridor/Serpent/Switchback/Zigzag
+// were originally listed in the reverse of their actual difficulty, so the
+// per-map scaling (MAP_MULT/MAP_START_MONEY, both index-driven) didn't
+// line up with how hard each layout actually plays. Gauntlet stays last as
+// the finale regardless.
 const MAPS = [
-  { name: 'Corridor',   wp: [[-1, 2], [10, 2], [10, 7], [18, 7]] },
-  { name: 'Serpent',    wp: [[-1, 3], [5, 3], [5, 8], [12, 8], [12, 2], [18, 2]] },
-  { name: 'Switchback', wp: [[-1, 1], [11, 1], [11, 4], [3, 4], [3, 7], [11, 7], [11, 9], [18, 9]] },
   { name: 'Zigzag',     wp: [[-1, 9], [4, 9], [4, 2], [8, 2], [8, 9], [12, 9], [12, 2], [18, 2]] },
+  { name: 'Switchback', wp: [[-1, 1], [11, 1], [11, 4], [3, 4], [3, 7], [11, 7], [11, 9], [18, 9]] },
+  { name: 'Serpent',    wp: [[-1, 3], [5, 3], [5, 8], [12, 8], [12, 2], [18, 2]] },
+  { name: 'Corridor',   wp: [[-1, 2], [10, 2], [10, 7], [18, 7]] },
   {
     name: 'Gauntlet',
     wp:  [[-1, 2], [9, 2], [9, 5], [18, 5]],
@@ -593,23 +600,23 @@ function pathPoint(map, s) {
 const TOWER_TYPES = [
   {
     id: 'blaster', name: 'Pulse Blaster', icon: '🔫', color: '#4bf5ff', glow: 'rgba(75,245,255,0.45)',
-    desc: 'reliable single-target', cost: 50, dmg: 13, rate: 1.6, range: 2.7, upCost: [40, 80],
+    desc: 'Basic all-around shooter', cost: 50, dmg: 13, rate: 1.6, range: 2.7, upCost: [40, 80],
   },
   {
     id: 'frost', name: 'Frost Emitter', icon: '❄️', color: '#9fd8ff', glow: 'rgba(159,216,255,0.45)',
-    desc: 'slows ships it hits', cost: 75, dmg: 5, rate: 1.1, range: 2.5, upCost: [60, 115],
+    desc: 'Slows every ship it hits', cost: 75, dmg: 5, rate: 1.1, range: 2.5, upCost: [60, 115],
   },
   {
     id: 'gatling', name: 'Gatling Array', icon: '🌀', color: '#5dffb0', glow: 'rgba(93,255,176,0.45)',
-    desc: 'shreds fast & light', cost: 110, dmg: 6, rate: 5.5, range: 2.4, upCost: [85, 165],
+    desc: 'Rapid fire — melts fast, light ships', cost: 110, dmg: 6, rate: 5.5, range: 2.4, upCost: [85, 165],
   },
   {
     id: 'mortar', name: 'Plasma Mortar', icon: '💥', color: '#ff4ecb', glow: 'rgba(255,78,203,0.45)',
-    desc: 'splash damage lobs', cost: 160, dmg: 42, rate: 0.55, range: 3.7, upCost: [130, 250],
+    desc: 'Splash damage hits a whole cluster', cost: 160, dmg: 42, rate: 0.55, range: 3.7, upCost: [130, 250],
   },
   {
     id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
-    desc: 'chains between ships', cost: 220, dmg: 24, rate: 1.1, range: 2.7, upCost: [175, 340],
+    desc: 'Lightning chains between ships', cost: 220, dmg: 24, rate: 1.1, range: 2.7, upCost: [175, 340],
     // TEMP: hidden from the shop for now. Left in place at its existing
     // array index (not deleted) so t.type on any already-placed/saved
     // tower and every other tower's index stay stable — only
@@ -618,11 +625,11 @@ const TOWER_TYPES = [
   },
   {
     id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
-    desc: 'pierces down the line', cost: 320, dmg: 95, rate: 0.45, range: 5.2, upCost: [255, 490],
+    desc: 'Heavy shot pierces straight down the line', cost: 320, dmg: 95, rate: 0.45, range: 5.2, upCost: [255, 490],
   },
   {
     id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
-    desc: 'boosts nearby towers', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 210],
+    desc: 'Boosts damage & fire rate nearby', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 210],
     buffDmg: 0.15, buffRate: 0.15,
   },
 ];
@@ -678,6 +685,10 @@ const ENEMY_TYPES = {
              trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
   boss:    { name: 'Dreadnought', icon: '☠', hp: 1500, speed: 0.7, reward: 150, leak: 10, radius: 0.55, color: '#ff5566', shape: 'boss', debutMap: 0, debutWave: 10,
              trait: 'Massive command ship. Enrages below half health.' },
+  splinter: { name: 'Splinter', icon: '✦', hp: 9, speed: 2.5, reward: 1, leak: 1, radius: 0.16, color: '#ffb37a', shape: 'tri', debutMap: 0, debutWave: 5,
+              trait: 'Debris from a shattered Brute — weak alone, dangerous in a pack. Never spawns in a wave directly.' },
+  superboss: { name: 'Super Dreadnought', icon: '☠', hp: 3600, speed: 0.6, reward: 260, leak: 14, radius: 0.85, color: '#c81c46', shape: 'superboss', debutMap: 4, debutWave: 30,
+               trait: 'The campaign\'s flagship threat. Splits into two full-strength Dreadnoughts on death — killing it is only half the fight.' },
 };
 
 /* Difficulty scaling. HP grows quadratically within a map so a board of
@@ -734,7 +745,11 @@ function buildWave(mapIdx, w) {
     lineOf(specials.length ? specials[specials.length - 1] : 'raider', 5 + Math.floor(w / 4) + mapIdx);
     if (avail('mender')) { rest(0.8); lineOf('mender', w === TOTAL_WAVES ? 3 : 1); }
     rest(1.5);
-    push('boss', 2);
+    // the true final wave of the campaign gets the flagship instead of a
+    // regular Dreadnought — every other boss wave (including wave 30 on
+    // earlier maps) keeps the normal one
+    const isCampaignFinale = w === TOTAL_WAVES && mapIdx === MAPS.length - 1;
+    push(isCampaignFinale ? 'superboss' : 'boss', 2);
     lineOf(w >= 5 ? 'brute' : 'scout', 3 + Math.floor(w / 5));
     return list;
   }
@@ -871,7 +886,7 @@ const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), sh
 // the only option on every map but Gauntlet) or 2 for a map's second lane.
 function enemyPath(map, pathNum) { return pathNum === 2 && map.path2 ? map.path2 : map; }
 
-function spawnEnemy(type, pathNum = 1) {
+function spawnEnemy(type, pathNum = 1, startS = 0) {
   const def = ENEMY_TYPES[type];
   const lvl = state.level;
   const hp = def.hp * hpMult(lvl);
@@ -879,7 +894,7 @@ function spawnEnemy(type, pathNum = 1) {
   const e = {
     type, def,
     path: pathNum,
-    s: 0,
+    s: startS,
     hp, maxHp: hp,
     speed: def.speed * speedMult(lvl),
     reward: Math.ceil(def.reward * rewardMult(lvl)),
@@ -894,10 +909,11 @@ function spawnEnemy(type, pathNum = 1) {
     dead: false,
     enraged: false,
   };
-  const p = pathPoint(enemyPath(currentMap(), pathNum), 0);
+  const p = pathPoint(enemyPath(currentMap(), pathNum), startS);
   e.x = p.x; e.y = p.y; e.angle = p.angle;
   enemies.push(e);
   if (type === 'boss') { Sound.boss(); showBanner('⚠ DREADNOUGHT INBOUND ⚠', ENEMY_TYPES.boss.name); }
+  else if (type === 'superboss') { Sound.boss(); showBanner('☠ SUPER DREADNOUGHT INBOUND ☠', ENEMY_TYPES.superboss.name); }
 }
 
 function damageEnemy(e, dmg, color, fromFrost = false) {
@@ -934,10 +950,10 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     }
   }
   e.hp -= dmg;
-  if (e.type === 'boss' && !e.enraged && e.hp < e.maxHp * 0.5) {
+  if ((e.type === 'boss' || e.type === 'superboss') && !e.enraged && e.hp < e.maxHp * 0.5) {
     e.enraged = true;
     e.speed *= 1.6;
-    showBanner('DREADNOUGHT ENRAGED!', 'it\'s speeding up');
+    showBanner(e.def.name.toUpperCase() + ' ENRAGED!', 'it\'s speeding up');
   }
   if (e.hp <= 0) {
     e.dead = true;
@@ -946,8 +962,23 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     state.score += e.reward * 10;
     state.kills++;
     addFloat(e.x, e.y, '+$' + e.reward, '#ffe74b');
-    burst(e.x, e.y, e.def.color, e.type === 'boss' ? 40 : 10, e.type === 'boss' ? 2.2 : 1);
-    if (e.type === 'boss') Sound.bigExplosion(); else Sound.explosion();
+    const big = e.type === 'boss' || e.type === 'superboss';
+    burst(e.x, e.y, e.def.color, e.type === 'superboss' ? 60 : big ? 40 : 10, e.type === 'superboss' ? 3 : big ? 2.2 : 1);
+    if (big) Sound.bigExplosion(); else Sound.explosion();
+
+    // Brute cracks apart into a pack of weak Splinters right where it died —
+    // the clumped low-HP burst is exactly what splash damage should punish.
+    if (e.type === 'brute') {
+      for (let k = 0; k < 10; k++) {
+        spawnEnemy('splinter', e.path, Math.max(0, e.s + (k - 4.5) * 0.09));
+      }
+    }
+    // Super Dreadnought's death spawns two full-strength Dreadnoughts —
+    // beating it is only the first half of the fight.
+    if (e.type === 'superboss') {
+      spawnEnemy('boss', e.path, e.s);
+      spawnEnemy('boss', e.path, Math.max(0, e.s - 0.35));
+    }
   }
 }
 
@@ -1332,7 +1363,26 @@ function setPlacing(i) {
   // dataset.index (the tower's true TOWER_TYPES index), not DOM child
   // position — those diverge as soon as any card is skipped (hidden)
   [...towerCardsEl.children].forEach((c) => c.classList.toggle('selected', Number(c.dataset.index) === i));
+  if (i == null) hideTowerIntel(); else showTowerIntel(i);
 }
+
+const towerIntelEl = $('towerIntel');
+function showTowerIntel(i) {
+  const ty = TOWER_TYPES[i];
+  const card = towerCardsEl.querySelector('[data-index="' + i + '"]');
+  if (!ty || !card) { hideTowerIntel(); return; }
+  towerIntelEl.innerHTML =
+    '<div class="ti-name" style="color:' + ty.color + '">' + ty.icon + ' ' + ty.name + '</div>' +
+    '<div class="ti-desc">' + ty.desc + '</div>';
+  towerIntelEl.classList.remove('hidden');
+  const r = card.getBoundingClientRect();
+  const top = Math.min(
+    Math.max(8, r.top + r.height / 2 - towerIntelEl.offsetHeight / 2),
+    window.innerHeight - towerIntelEl.offsetHeight - 8
+  );
+  towerIntelEl.style.top = top + 'px';
+}
+function hideTowerIntel() { towerIntelEl.classList.add('hidden'); }
 
 function refreshShopAfford() {
   [...towerCardsEl.children].forEach((c) => {
@@ -1555,6 +1605,7 @@ function startGame(mapIdx) {
   state.autoTimer = 0;
   state.placing = null;
   state.selected = null;
+  hideTowerIntel();
   // types debuted on earlier maps (or before this checkpoint) skip banners
   state.seen = new Set(Object.keys(ENEMY_TYPES).filter((k) => {
     const d = ENEMY_TYPES[k];
@@ -1879,9 +1930,16 @@ function drawPath(map) {
     const spacing = cell * 0.62;
     const phase = (performance.now() / 380) % spacing;
     const halfW = cell * 0.13, tip = cell * 0.17;
+    // A dual-spawn map's rendered path is split into several pieces that
+    // meet at shared junction points (see splitSharedTrunk) — each piece
+    // still draws its own chevron run from s=0, so without this margin two
+    // pieces meeting at a junction each drop a chevron right on top of it,
+    // reading as one arrow pointing into another.
+    const margin = spacing * 0.55;
     ctx.strokeStyle = 'rgba(75, 245, 255, 0.55)';
     ctx.lineWidth = 2;
     for (let s = phase; s < map.totalLen; s += spacing) {
+      if (s < margin || s > map.totalLen - margin) continue;
       const p = pathPoint(map, s);
       ctx.save();
       ctx.translate(px(p.x), py(p.y));
@@ -2326,16 +2384,64 @@ function drawEnemy(e) {
   ctx.shadowBlur = 12;
   ctx.fillStyle = e.def.color;
 
-  if (e.def.shape === 'boss') {
+  if (e.def.shape === 'boss' || e.def.shape === 'superboss') {
+    // angular flagship silhouette — swept wings, a spiked spine, and
+    // rear engine flares, not just a scaled oval
+    const big = e.def.shape === 'superboss';
     const t = performance.now() / 1000;
     const pulse = 1 + Math.sin(t * 3) * 0.06;
     ctx.rotate(e.angle);
+
+    // rear engine flares (drawn under the hull)
+    ctx.fillStyle = 'rgba(255,150,60,0.55)';
+    for (const sy of [-0.5, 0, 0.5]) {
+      ctx.beginPath();
+      ctx.ellipse(-r * 1.15, r * sy * 0.9, r * (0.26 + Math.abs(sy) * 0.06), r * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // main hull — forward-swept wings and twin rear spikes
+    ctx.fillStyle = e.def.color;
     ctx.beginPath();
-    ctx.ellipse(0, 0, r * 1.5 * pulse, r * 0.85 * pulse, 0, 0, Math.PI * 2);
+    ctx.moveTo(r * 1.5 * pulse, 0);
+    ctx.lineTo(r * 0.55, -r * 0.5);
+    ctx.lineTo(r * 0.1, -r * 1.05 * pulse);
+    ctx.lineTo(-r * 0.55, -r * 0.55);
+    ctx.lineTo(-r * 1.25, -r * 0.22);
+    ctx.lineTo(-r * 0.85, 0);
+    ctx.lineTo(-r * 1.25, r * 0.22);
+    ctx.lineTo(-r * 0.55, r * 0.55);
+    ctx.lineTo(r * 0.1, r * 1.05 * pulse);
+    ctx.lineTo(r * 0.55, r * 0.5);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = e.enraged ? '#ffe74b' : '#b46dff';
+
+    // dark spine ridge for depth
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = Math.max(1.5, r * 0.06);
     ctx.beginPath();
-    ctx.ellipse(0, 0, r * 0.8, r * 0.45, 0, 0, Math.PI * 2);
+    ctx.moveTo(r * 1.4, 0);
+    ctx.lineTo(-r * 0.9, 0);
+    ctx.stroke();
+
+    if (big) {
+      // extra crown spikes — reads as a bulkier, upgraded silhouette
+      // rather than just a bigger boss
+      ctx.fillStyle = e.def.color;
+      for (const sgn of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(r * 0.2, sgn * r * 0.55);
+        ctx.lineTo(r * 0.7, sgn * r * 1.35);
+        ctx.lineTo(r * 0.05, sgn * r * 0.78);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // glowing core
+    ctx.fillStyle = e.enraged ? '#ffe74b' : (big ? '#ff3355' : '#b46dff');
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * (big ? 0.5 : 0.4), r * (big ? 0.3 : 0.24), 0, 0, Math.PI * 2);
     ctx.fill();
   } else if (e.def.shape === 'hex') {
     ctx.rotate(e.angle);

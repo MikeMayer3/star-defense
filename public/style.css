@@ -399,6 +399,35 @@ canvas {
 .ic-stats { font-size: 0.7rem; color: #9fb6d9; margin-top: 3px; }
 .ic-trait { font-size: 0.72rem; color: #cfe4ff; margin-top: 5px; line-height: 1.4; }
 
+/* ============ TOWER INFO POPUP (shown while a shop card is selected) ============
+   Anchored just left of the shop rail rather than literally to a card's
+   right — the rail is pinned to the screen's right edge with no room past
+   it, so this is the only side that stays on-screen at any width. Vertical
+   position tracks the selected card so it still reads as "next to it". */
+#towerIntel {
+  position: fixed;
+  right: calc(var(--rail-w) + 14px);
+  z-index: 16;
+  max-width: 170px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 10px;
+  padding: 8px 10px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+#towerIntel.hidden { display: none; }
+#towerIntel::after {
+  content: '';
+  position: absolute;
+  top: 50%; right: -7px;
+  transform: translateY(-50%);
+  border: 7px solid transparent;
+  border-left-color: var(--border-glow);
+}
+.ti-name { font-weight: 800; letter-spacing: 0.4px; font-size: 0.76rem; text-shadow: 0 0 8px currentColor; }
+.ti-desc { font-size: 0.7rem; color: #cfe4ff; margin-top: 3px; line-height: 1.35; }
+
 /* ============ RIGHT RAIL (tower shop) ============ */
 #shop {
   position: fixed;
