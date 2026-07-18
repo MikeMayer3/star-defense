@@ -792,7 +792,18 @@ function buildWave(mapIdx, w) {
   // main body
   const mainN = Math.max(6, Math.floor(budget * 0.7));
   mixed(pool, Math.floor(mainN / 2));
-  if (w >= 6 && rng() < 0.7) packOf('swarm', 5 + ((rng() * 4) | 0));
+  // Swarm surge — the deliberate "AoE matters" moment. Several dense packs
+  // of low-HP swarmers arrive tightly enough that single-target fire can't
+  // keep up with the throughput, but splash/aura shreds them. Scales with
+  // wave so it stays a real threat as HP climbs; without at least one AoE
+  // (or slowing) tower a single-target board leaks hard here. See the
+  // balance sim that motivated this — pure single-target boards go from
+  // best to worst once a surge is present, and mixed boards win.
+  if (w >= 6) {
+    const packs = 2 + Math.floor(w / 15);       // 2 early, 3 mid, 4 at wave 30
+    const packSize = 8 + Math.floor(w * 0.45);  // ~10 at wave 6 up to ~21 by wave 30
+    for (let p = 0; p < packs; p++) packOf('swarm', packSize, 0.1);
+  }
   if (avail('mender') && w >= 12 && rng() < 0.3 + w * 0.01) push('mender');
   mixed(pool, Math.ceil(mainN / 2));
 
@@ -2401,64 +2412,92 @@ function drawEnemy(e) {
   ctx.fillStyle = e.def.color;
 
   if (e.def.shape === 'boss' || e.def.shape === 'superboss') {
-    // angular flagship silhouette — swept wings, a spiked spine, and
-    // rear engine flares, not just a scaled oval
+    // menacing capital warship: a dark armored hull outlined in neon, a
+    // sharp prow, forward weapon prongs (pincers that jut past the nose),
+    // hard-edged swept wing blades, twin rear engine tails, and a glowing
+    // diamond core "eye". The Super Dreadnought adds a second, wider pair
+    // of prongs and longer wing blades so it reads as a heavier ship.
     const big = e.def.shape === 'superboss';
     const t = performance.now() / 1000;
-    const pulse = 1 + Math.sin(t * 3) * 0.06;
+    const pulse = 1 + Math.sin(t * 3) * 0.05;
+    const wt = (big ? 1.35 : 1.12) * pulse; // wing-blade reach
     ctx.rotate(e.angle);
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 6;
 
-    // rear engine flares (drawn under the hull)
-    ctx.fillStyle = 'rgba(255,150,60,0.55)';
-    for (const sy of [-0.5, 0, 0.5]) {
+    // darkened hull tone derived from the enemy's neon color
+    const cn = parseInt(e.def.color.slice(1), 16);
+    const hull = 'rgb(' + (((cn >> 16 & 255) * 0.26) | 0) + ',' +
+      (((cn >> 8 & 255) * 0.26) | 0) + ',' + (((cn & 255) * 0.26) | 0) + ')';
+
+    // rear engine flares (twin tails)
+    ctx.fillStyle = 'rgba(255,140,50,0.6)';
+    for (const sy of [-0.34, 0.34]) {
       ctx.beginPath();
-      ctx.ellipse(-r * 1.15, r * sy * 0.9, r * (0.26 + Math.abs(sy) * 0.06), r * 0.15, 0, 0, Math.PI * 2);
+      ctx.ellipse(-r * 1.05, r * sy, r * 0.3, r * 0.14, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // main hull — forward-swept wings and twin rear spikes
+    // forward weapon prongs (bright, glowing, jutting past the prow)
+    const prong = (yRoot, yTip, xTip) => {
+      ctx.beginPath();
+      ctx.moveTo(r * 0.45, r * yRoot);
+      ctx.lineTo(r * xTip, r * yTip);
+      ctx.lineTo(r * 0.6, r * yRoot * 0.3);
+      ctx.closePath();
+      ctx.fill();
+    };
     ctx.fillStyle = e.def.color;
+    ctx.shadowColor = e.def.color; ctx.shadowBlur = 12;
+    prong(-0.42, -0.62, 1.95); prong(0.42, 0.62, 1.95);
+    if (big) { prong(-0.8, -1.02, 1.5); prong(0.8, 1.02, 1.5); }
+    ctx.shadowBlur = 0;
+
+    // main hull — sleek dark arrow with wings swept BACK (so the forward
+    // direction reads clearly), a concave twin-tail rear notch
+    ctx.fillStyle = hull;
     ctx.beginPath();
-    ctx.moveTo(r * 1.5 * pulse, 0);
-    ctx.lineTo(r * 0.55, -r * 0.5);
-    ctx.lineTo(r * 0.1, -r * 1.05 * pulse);
-    ctx.lineTo(-r * 0.55, -r * 0.55);
-    ctx.lineTo(-r * 1.25, -r * 0.22);
-    ctx.lineTo(-r * 0.85, 0);
-    ctx.lineTo(-r * 1.25, r * 0.22);
-    ctx.lineTo(-r * 0.55, r * 0.55);
-    ctx.lineTo(r * 0.1, r * 1.05 * pulse);
-    ctx.lineTo(r * 0.55, r * 0.5);
+    ctx.moveTo(r * 1.7 * pulse, 0);           // sharp prow
+    ctx.lineTo(r * 0.6, -r * 0.3);
+    ctx.lineTo(-r * 0.8 * wt, -r * 1.05 * wt); // upper wing tip, swept back
+    ctx.lineTo(-r * 0.5, -r * 0.34);
+    ctx.lineTo(-r * 1.05, -r * 0.34);
+    ctx.lineTo(-r * 0.72, 0);                 // concave rear notch
+    ctx.lineTo(-r * 1.05, r * 0.34);
+    ctx.lineTo(-r * 0.5, r * 0.34);
+    ctx.lineTo(-r * 0.8 * wt, r * 1.05 * wt);  // lower wing tip, swept back
+    ctx.lineTo(r * 0.6, r * 0.3);
     ctx.closePath();
     ctx.fill();
+    // neon edge highlight
+    ctx.strokeStyle = e.def.color;
+    ctx.lineWidth = Math.max(2, r * 0.09);
+    ctx.shadowColor = e.def.color; ctx.shadowBlur = 14;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
 
-    // dark spine ridge for depth
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = Math.max(1.5, r * 0.06);
+    // inner plating ridges for depth
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = Math.max(1, r * 0.05);
     ctx.beginPath();
-    ctx.moveTo(r * 1.4, 0);
-    ctx.lineTo(-r * 0.9, 0);
+    ctx.moveTo(r * 1.5, 0); ctx.lineTo(-r * 0.6, 0);
+    ctx.moveTo(r * 0.25, -r * 0.5); ctx.lineTo(-r * 0.3, -r * 0.22);
+    ctx.moveTo(r * 0.25, r * 0.5); ctx.lineTo(-r * 0.3, r * 0.22);
     ctx.stroke();
 
-    if (big) {
-      // extra crown spikes — reads as a bulkier, upgraded silhouette
-      // rather than just a bigger boss
-      ctx.fillStyle = e.def.color;
-      for (const sgn of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(r * 0.2, sgn * r * 0.55);
-        ctx.lineTo(r * 0.7, sgn * r * 1.35);
-        ctx.lineTo(r * 0.05, sgn * r * 0.78);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-
-    // glowing core
-    ctx.fillStyle = e.enraged ? '#ffe74b' : (big ? '#ff3355' : '#b46dff');
+    // glowing diamond core "eye" (sharper / more menacing than a dot)
+    const coreCol = e.enraged ? '#ffe74b' : (big ? '#ff2a3d' : '#ff5a8a');
+    const er = r * (big ? 0.34 : 0.28);
+    ctx.fillStyle = coreCol;
+    ctx.shadowColor = coreCol; ctx.shadowBlur = big ? 20 : 14;
     ctx.beginPath();
-    ctx.ellipse(0, 0, r * (big ? 0.5 : 0.4), r * (big ? 0.3 : 0.24), 0, 0, Math.PI * 2);
+    ctx.moveTo(r * 0.12 + er, 0);
+    ctx.lineTo(r * 0.12, -er * 0.72);
+    ctx.lineTo(r * 0.12 - er, 0);
+    ctx.lineTo(r * 0.12, er * 0.72);
+    ctx.closePath();
     ctx.fill();
+    ctx.shadowBlur = 0;
   } else if (e.def.shape === 'hex') {
     ctx.rotate(e.angle);
     poly(6, r, e.def.color);
