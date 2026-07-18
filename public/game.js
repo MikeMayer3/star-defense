@@ -744,13 +744,16 @@ function buildWave(mapIdx, w) {
     const specials = ['shield', 'aegis', 'phantom'].filter(avail);
     lineOf(specials.length ? specials[specials.length - 1] : 'raider', 5 + Math.floor(w / 4) + mapIdx);
     if (avail('mender')) { rest(0.8); lineOf('mender', w === TOTAL_WAVES ? 3 : 1); }
+    // brute escort spawns BEFORE the boss so the boss is the last thing to
+    // launch from the carrier — the carrier hides the moment the boss
+    // undocks (see drawPortal), so nothing must spawn after it
+    lineOf(w >= 5 ? 'brute' : 'scout', 3 + Math.floor(w / 5));
     rest(1.5);
     // the true final wave of the campaign gets the flagship instead of a
     // regular Dreadnought — every other boss wave (including wave 30 on
     // earlier maps) keeps the normal one
     const isCampaignFinale = w === TOTAL_WAVES && mapIdx === MAPS.length - 1;
     push(isCampaignFinale ? 'superboss' : 'boss', 2);
-    lineOf(w >= 5 ? 'brute' : 'scout', 3 + Math.floor(w / 5));
     return list;
   }
 
@@ -2046,69 +2049,61 @@ function drawBase(map) {
 
 // The spawn point — an alien mothership hovering just off the lane,
 // dispatching ships down a tractor beam onto the path.
-function drawPortal(map) {
-  const p = pathPoint(map, 0.6);
+// The spawn point is a Dreadnought "carrier" mothership that enemies pour
+// out of — no more pink saucer portal. On a boss wave the carrier IS the
+// boss: once a boss/superboss for this lane is on the board it has undocked
+// and rolled out, so we stop drawing the stationary carrier for that lane.
+function drawPortal(map, lane) {
+  // The carrier's boss, if it has spawned. It rolls in from off-board (s 0)
+  // toward the carrier's dock (~s 1.0). We keep drawing the carrier until
+  // the boss reaches the dock, animating a launch build-up as it approaches
+  // (shake + thruster ignition + glow surge), then hand off to the moving
+  // boss for a clean "undock" instead of an instant blink.
+  const boss = enemies.find((e) => !e.dead && e.path === lane &&
+    (e.type === 'boss' || e.type === 'superboss'));
+  if (boss && boss.s >= 0.9) return;      // undocked — the boss IS the carrier now
+  const charge = boss ? Math.min(1, boss.s / 0.9) : 0; // 0..1 launch build-up
+
+  // carrier matches the boss this map launches: a heavier Super Dreadnought
+  // on the campaign finale, a regular Dreadnought on the earlier maps
+  const isFinale = state.mapIndex === MAPS.length - 1;
+  const big = isFinale;
+  const edge = isFinale ? '#c81c46' : '#ff5566';
+  const core = isFinale ? '#ff2a3d' : '#ff5a8a';
+  const r = cell * (isFinale ? 0.95 : 0.8) * (1 + charge * 0.08);
+
   const t = performance.now() / 1000;
-  const x = px(p.x), y = py(p.y);
-  const hover = cell * 0.65;
-  const sx = x, sy = y - hover;
-  const bodyRx = cell * 0.8, bodyRy = cell * 0.3;
+  const p = pathPoint(map, 1.0);          // just inside the board entrance
+  const bob = Math.sin(t * 1.6) * cell * 0.06;
+  const jx = charge * cell * 0.06 * Math.sin(t * 47); // launch shudder
+  const jy = charge * cell * 0.06 * Math.cos(t * 41);
   ctx.save();
+  ctx.translate(px(p.x) + jx, py(p.y) + bob + jy);
 
-  // tractor beam down to the spawn point
-  const beamW = bodyRx * 0.5;
-  ctx.beginPath();
-  ctx.moveTo(sx - beamW, sy + bodyRy * 0.5);
-  ctx.lineTo(sx + beamW, sy + bodyRy * 0.5);
-  ctx.lineTo(x + cell * 0.14, y);
-  ctx.lineTo(x - cell * 0.14, y);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(255, 78, 203, ' + (0.22 + Math.sin(t * 4) * 0.06) + ')';
-  ctx.fill();
+  const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
 
-  // saucer body — a lighter fill so the disc itself reads clearly instead
-  // of dissolving into its own glow against the dark backdrop
-  ctx.shadowColor = '#ff4ecb';
-  ctx.shadowBlur = 9;
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, bodyRx, bodyRy, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#4a3768';
-  ctx.fill();
-  ctx.strokeStyle = '#ff4ecb';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // cockpit dome, overlapping the body so it reads as one integrated hull
-  ctx.beginPath();
-  ctx.ellipse(sx, sy - bodyRy * 0.45, bodyRx * 0.34, bodyRy * 0.75, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,140,225,0.8)';
-  ctx.fill();
-  ctx.strokeStyle = '#ff4ecb';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // rim lights
-  ctx.shadowBlur = 8;
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2;
-    const lx = sx + Math.cos(a) * bodyRx * 0.85;
-    const ly = sy + Math.sin(a) * bodyRy * 0.85;
-    const glow = 0.55 + Math.sin(t * 3 + i) * 0.35;
-    ctx.beginPath();
-    ctx.arc(lx, ly, cell * 0.045, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,210,245,' + glow + ')';
-    ctx.fill();
+  // rear thruster ignition — flares up as the carrier powers to launch
+  if (charge > 0) {
+    const rx = -cos * r * 1.4, ry = -sin * r * 1.4, rr = r * (0.8 + charge);
+    const rg = ctx.createRadialGradient(rx, ry, 0, rx, ry, rr);
+    rg.addColorStop(0, 'rgba(255,180,60,' + (0.6 * charge) + ')');
+    rg.addColorStop(1, 'rgba(255,180,60,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
   }
-  ctx.shadowBlur = 0;
 
-  // spawn glow at the actual path point, where ships fade in
-  for (let i = 0; i < 2; i++) {
-    ctx.beginPath();
-    ctx.arc(x, y, cell * (0.22 + i * 0.1 + Math.sin(t * 3 + i) * 0.03), 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 78, 203, ' + (0.6 - i * 0.25) + ')';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
+  // launch-bay bloom at the prow, where ships spill out (surges on launch)
+  const glow = Math.min(1, (0.42 + Math.sin(t * 4) * 0.2) * (1 + charge * 2.5));
+  const gx = cos * r * 1.2, gy = sin * r * 1.2;
+  const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * 1.25);
+  grad.addColorStop(0, 'rgba(255,90,120,' + glow + ')');
+  grad.addColorStop(1, 'rgba(255,90,120,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(gx, gy, r * 1.25, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawWarship(r, p.angle, edge, core, big);
   ctx.restore();
 }
 
@@ -2399,6 +2394,94 @@ function lightningBolt(r, color, g = ctx) {
   g.fill();
 }
 
+// Shared menacing-warship silhouette, used by both the Dreadnought enemy and
+// the spawn "carrier" (drawPortal). Draws at the CURRENT transform origin —
+// the caller sets up translate() and its own save/restore; this only adds a
+// rotate. A dark armored hull outlined in neon, a sharp prow, forward weapon
+// prongs (pincers past the nose), back-swept wing blades, twin engine tails,
+// and a glowing diamond core "eye". big = the heavier Super Dreadnought.
+function drawWarship(r, angle, edgeColor, coreColor, big) {
+  const t = performance.now() / 1000;
+  const pulse = 1 + Math.sin(t * 3) * 0.05;
+  const wt = (big ? 1.35 : 1.12) * pulse; // wing-blade reach
+  ctx.rotate(angle);
+  ctx.lineJoin = 'miter';
+  ctx.miterLimit = 6;
+
+  // darkened hull tone derived from the neon edge color
+  const cn = parseInt(edgeColor.slice(1), 16);
+  const hull = 'rgb(' + (((cn >> 16 & 255) * 0.26) | 0) + ',' +
+    (((cn >> 8 & 255) * 0.26) | 0) + ',' + (((cn & 255) * 0.26) | 0) + ')';
+
+  // rear engine flares (twin tails)
+  ctx.fillStyle = 'rgba(255,140,50,0.6)';
+  for (const sy of [-0.34, 0.34]) {
+    ctx.beginPath();
+    ctx.ellipse(-r * 1.05, r * sy, r * 0.3, r * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // forward weapon prongs (bright, glowing, jutting past the prow)
+  const prong = (yRoot, yTip, xTip) => {
+    ctx.beginPath();
+    ctx.moveTo(r * 0.45, r * yRoot);
+    ctx.lineTo(r * xTip, r * yTip);
+    ctx.lineTo(r * 0.6, r * yRoot * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  };
+  ctx.fillStyle = edgeColor;
+  ctx.shadowColor = edgeColor; ctx.shadowBlur = 12;
+  prong(-0.42, -0.62, 1.95); prong(0.42, 0.62, 1.95);
+  if (big) { prong(-0.8, -1.02, 1.5); prong(0.8, 1.02, 1.5); }
+  ctx.shadowBlur = 0;
+
+  // main hull — sleek dark arrow with wings swept BACK (so forward reads
+  // clearly), a concave twin-tail rear notch
+  ctx.fillStyle = hull;
+  ctx.beginPath();
+  ctx.moveTo(r * 1.7 * pulse, 0);            // sharp prow
+  ctx.lineTo(r * 0.6, -r * 0.3);
+  ctx.lineTo(-r * 0.8 * wt, -r * 1.05 * wt); // upper wing tip, swept back
+  ctx.lineTo(-r * 0.5, -r * 0.34);
+  ctx.lineTo(-r * 1.05, -r * 0.34);
+  ctx.lineTo(-r * 0.72, 0);                  // concave rear notch
+  ctx.lineTo(-r * 1.05, r * 0.34);
+  ctx.lineTo(-r * 0.5, r * 0.34);
+  ctx.lineTo(-r * 0.8 * wt, r * 1.05 * wt);  // lower wing tip, swept back
+  ctx.lineTo(r * 0.6, r * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  // neon edge highlight
+  ctx.strokeStyle = edgeColor;
+  ctx.lineWidth = Math.max(2, r * 0.09);
+  ctx.shadowColor = edgeColor; ctx.shadowBlur = 14;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // inner plating ridges for depth
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = Math.max(1, r * 0.05);
+  ctx.beginPath();
+  ctx.moveTo(r * 1.5, 0); ctx.lineTo(-r * 0.6, 0);
+  ctx.moveTo(r * 0.25, -r * 0.5); ctx.lineTo(-r * 0.3, -r * 0.22);
+  ctx.moveTo(r * 0.25, r * 0.5); ctx.lineTo(-r * 0.3, r * 0.22);
+  ctx.stroke();
+
+  // glowing diamond core "eye"
+  const er = r * (big ? 0.34 : 0.28);
+  ctx.fillStyle = coreColor;
+  ctx.shadowColor = coreColor; ctx.shadowBlur = big ? 20 : 14;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.12 + er, 0);
+  ctx.lineTo(r * 0.12, -er * 0.72);
+  ctx.lineTo(r * 0.12 - er, 0);
+  ctx.lineTo(r * 0.12, er * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
 function drawEnemy(e) {
   const x = px(e.x), y = py(e.y);
   const r = e.def.radius * cell;
@@ -2412,92 +2495,9 @@ function drawEnemy(e) {
   ctx.fillStyle = e.def.color;
 
   if (e.def.shape === 'boss' || e.def.shape === 'superboss') {
-    // menacing capital warship: a dark armored hull outlined in neon, a
-    // sharp prow, forward weapon prongs (pincers that jut past the nose),
-    // hard-edged swept wing blades, twin rear engine tails, and a glowing
-    // diamond core "eye". The Super Dreadnought adds a second, wider pair
-    // of prongs and longer wing blades so it reads as a heavier ship.
     const big = e.def.shape === 'superboss';
-    const t = performance.now() / 1000;
-    const pulse = 1 + Math.sin(t * 3) * 0.05;
-    const wt = (big ? 1.35 : 1.12) * pulse; // wing-blade reach
-    ctx.rotate(e.angle);
-    ctx.lineJoin = 'miter';
-    ctx.miterLimit = 6;
-
-    // darkened hull tone derived from the enemy's neon color
-    const cn = parseInt(e.def.color.slice(1), 16);
-    const hull = 'rgb(' + (((cn >> 16 & 255) * 0.26) | 0) + ',' +
-      (((cn >> 8 & 255) * 0.26) | 0) + ',' + (((cn & 255) * 0.26) | 0) + ')';
-
-    // rear engine flares (twin tails)
-    ctx.fillStyle = 'rgba(255,140,50,0.6)';
-    for (const sy of [-0.34, 0.34]) {
-      ctx.beginPath();
-      ctx.ellipse(-r * 1.05, r * sy, r * 0.3, r * 0.14, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // forward weapon prongs (bright, glowing, jutting past the prow)
-    const prong = (yRoot, yTip, xTip) => {
-      ctx.beginPath();
-      ctx.moveTo(r * 0.45, r * yRoot);
-      ctx.lineTo(r * xTip, r * yTip);
-      ctx.lineTo(r * 0.6, r * yRoot * 0.3);
-      ctx.closePath();
-      ctx.fill();
-    };
-    ctx.fillStyle = e.def.color;
-    ctx.shadowColor = e.def.color; ctx.shadowBlur = 12;
-    prong(-0.42, -0.62, 1.95); prong(0.42, 0.62, 1.95);
-    if (big) { prong(-0.8, -1.02, 1.5); prong(0.8, 1.02, 1.5); }
-    ctx.shadowBlur = 0;
-
-    // main hull — sleek dark arrow with wings swept BACK (so the forward
-    // direction reads clearly), a concave twin-tail rear notch
-    ctx.fillStyle = hull;
-    ctx.beginPath();
-    ctx.moveTo(r * 1.7 * pulse, 0);           // sharp prow
-    ctx.lineTo(r * 0.6, -r * 0.3);
-    ctx.lineTo(-r * 0.8 * wt, -r * 1.05 * wt); // upper wing tip, swept back
-    ctx.lineTo(-r * 0.5, -r * 0.34);
-    ctx.lineTo(-r * 1.05, -r * 0.34);
-    ctx.lineTo(-r * 0.72, 0);                 // concave rear notch
-    ctx.lineTo(-r * 1.05, r * 0.34);
-    ctx.lineTo(-r * 0.5, r * 0.34);
-    ctx.lineTo(-r * 0.8 * wt, r * 1.05 * wt);  // lower wing tip, swept back
-    ctx.lineTo(r * 0.6, r * 0.3);
-    ctx.closePath();
-    ctx.fill();
-    // neon edge highlight
-    ctx.strokeStyle = e.def.color;
-    ctx.lineWidth = Math.max(2, r * 0.09);
-    ctx.shadowColor = e.def.color; ctx.shadowBlur = 14;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // inner plating ridges for depth
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-    ctx.lineWidth = Math.max(1, r * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(r * 1.5, 0); ctx.lineTo(-r * 0.6, 0);
-    ctx.moveTo(r * 0.25, -r * 0.5); ctx.lineTo(-r * 0.3, -r * 0.22);
-    ctx.moveTo(r * 0.25, r * 0.5); ctx.lineTo(-r * 0.3, r * 0.22);
-    ctx.stroke();
-
-    // glowing diamond core "eye" (sharper / more menacing than a dot)
     const coreCol = e.enraged ? '#ffe74b' : (big ? '#ff2a3d' : '#ff5a8a');
-    const er = r * (big ? 0.34 : 0.28);
-    ctx.fillStyle = coreCol;
-    ctx.shadowColor = coreCol; ctx.shadowBlur = big ? 20 : 14;
-    ctx.beginPath();
-    ctx.moveTo(r * 0.12 + er, 0);
-    ctx.lineTo(r * 0.12, -er * 0.72);
-    ctx.lineTo(r * 0.12 - er, 0);
-    ctx.lineTo(r * 0.12, er * 0.72);
-    ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    drawWarship(r, e.angle, e.def.color, coreCol, big);
   } else if (e.def.shape === 'hex') {
     ctx.rotate(e.angle);
     poly(6, r, e.def.color);
@@ -2608,8 +2608,8 @@ function render() {
   for (const p of map.renderPaths) strokeRoad(p, 'glow');
   for (const p of map.renderPaths) strokeRoad(p, 'fill');
   for (const p of map.renderPaths) drawRoadChevrons(p);
-  drawPortal(map);
-  if (map.path2) drawPortal(map.path2); // each lane's own mothership — no overlap concern here
+  drawPortal(map, 1);
+  if (map.path2) drawPortal(map.path2, 2); // each lane's own carrier — no overlap concern here
   drawBase(map); // both lanes converge on the same base — one is enough
 
   if (state.placing != null) drawGridOverlay();
