@@ -514,9 +514,13 @@ const MAPS = [
   { name: 'Serpent',    wp: [[-1, 3], [5, 3], [5, 8], [12, 8], [12, 2], [18, 2]] },
   { name: 'Corridor',   wp: [[-1, 2], [10, 2], [10, 7], [18, 7]] },
   {
+    // symmetric 3-lane finale: three spawn lanes at rows 2 / 5 / 8 (mirrored
+    // about the middle row 5), all merging at col 9 and exiting right along
+    // the middle row into Earth
     name: 'Gauntlet',
-    wp:  [[-1, 2], [9, 2], [9, 5], [18, 5]],
-    wp2: [[-1, 9], [9, 9], [9, 5], [18, 5]],
+    wp:  [[-1, 2], [9, 2], [9, 5], [18, 5]], // top lane
+    wp2: [[-1, 5], [9, 5], [18, 5]],         // middle lane — straight down the exit row
+    wp3: [[-1, 8], [9, 8], [9, 5], [18, 5]], // bottom lane
   },
 ];
 
@@ -544,34 +548,42 @@ function buildPath(wp) {
   return p;
 }
 
-// A dual-spawn map's two lanes share a trailing run of identical waypoints
-// (the merged trunk). Drawing each full lane separately would stroke that
-// shared stretch twice, doubling its glow and chevrons where they meet.
-// This splits the two lanes into their unique entries plus the shared
-// trunk exactly once, purely for rendering — movement still uses each
-// lane's full waypoint list (m.wp / m.wp2), unaffected.
-function splitSharedTrunk(wpA, wpB) {
+// A multi-spawn map's lanes share a trailing run of identical waypoints (the
+// merged trunk). Drawing each full lane separately would stroke that shared
+// stretch once per lane, doubling its glow and chevrons where they meet.
+// This splits the lanes into their unique entries plus the shared trunk
+// exactly once, purely for rendering — movement still uses each lane's full
+// waypoint list (m.lanes), unaffected.
+function splitSharedTrunk(wps) {
   let n = 0;
-  while (
-    n < wpA.length && n < wpB.length &&
-    wpA[wpA.length - 1 - n][0] === wpB[wpB.length - 1 - n][0] &&
-    wpA[wpA.length - 1 - n][1] === wpB[wpB.length - 1 - n][1]
-  ) n++;
-  if (n < 2) return [wpA, wpB]; // no shared segment worth splitting out
-  const trunk = wpA.slice(wpA.length - n);
-  const entryA = wpA.slice(0, wpA.length - n + 1); // ends exactly at the junction, so it still connects visually
-  const entryB = wpB.slice(0, wpB.length - n + 1);
-  return [entryA, entryB, trunk];
+  while (true) {
+    const a = wps[0][wps[0].length - 1 - n];
+    if (!a) break;
+    let all = true;
+    for (const wp of wps) {
+      const b = wp[wp.length - 1 - n];
+      if (!b || b[0] !== a[0] || b[1] !== a[1]) { all = false; break; }
+    }
+    if (!all) break;
+    n++;
+  }
+  if (n < 2) return wps.slice(); // no shared segment worth splitting out
+  const trunk = wps[0].slice(wps[0].length - n);
+  // each entry ends exactly at the junction, so it still connects visually
+  const entries = wps.map((wp) => wp.slice(0, wp.length - n + 1));
+  return [...entries, trunk];
 }
 
 for (const m of MAPS) {
-  Object.assign(m, buildPath(m.wp)); // path 1's data lives directly on the map, unchanged from before
-  m.renderPaths = [buildPath(m.wp)];
-  if (m.wp2) {
-    m.path2 = buildPath(m.wp2);
-    for (const c of m.path2.cells) m.cells.add(c); // one shared buildable-blocking set
-    m.renderPaths = splitSharedTrunk(m.wp, m.wp2).map(buildPath);
-  }
+  Object.assign(m, buildPath(m.wp)); // primary lane's data lives on the map, unchanged
+  const wps = [m.wp];
+  if (m.wp2) wps.push(m.wp2);
+  if (m.wp3) wps.push(m.wp3);
+  m.lanes = wps.map(buildPath);      // lanes[0] = primary; lanes[1..] = extra spawn lanes
+  m.path2 = m.lanes[1] || null;      // kept for existing references
+  m.path3 = m.lanes[2] || null;
+  for (const lane of m.lanes.slice(1)) for (const c of lane.cells) m.cells.add(c); // one shared build-blocking set
+  m.renderPaths = (wps.length > 1 ? splitSharedTrunk(wps) : [m.wp]).map(buildPath);
 }
 
 // Position along a map's path at distance s (cell units).
@@ -727,11 +739,10 @@ function buildWave(mapIdx, w) {
   const list = [];
   let t = 0.5;
   const gap = Math.max(0.3, 1.0 - w * 0.02); // spawns tighten as waves go up
-  // Gauntlet's second lane: each spawn independently rolls which side it
-  // comes from, so a wave reads as "ships from both fronts", not a clean
-  // half-and-half split.
-  const dualLane = !!MAPS[mapIdx].wp2;
-  const pickPath = () => (dualLane && rng() < 0.5 ? 2 : 1);
+  // On a multi-lane map each spawn independently rolls which lane it comes
+  // from, so a wave reads as "ships from every front", not a clean split.
+  const laneCount = MAPS[mapIdx].lanes ? MAPS[mapIdx].lanes.length : 1;
+  const pickPath = () => (laneCount > 1 ? 1 + ((rng() * laneCount) | 0) : 1);
   const push = (type, extraGap = 0) => { list.push({ type, t, path: pickPath() }); t += gap + extraGap; };
   const rest = (d) => { t += d; };
   const lineOf = (type, n) => { for (let i = 0; i < n; i++) push(type); };
@@ -898,7 +909,7 @@ const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), sh
    ====================================================================== */
 // pathNum selects which lane a spawned enemy walks — 1 (the default, and
 // the only option on every map but Gauntlet) or 2 for a map's second lane.
-function enemyPath(map, pathNum) { return pathNum === 2 && map.path2 ? map.path2 : map; }
+function enemyPath(map, pathNum) { return (map.lanes && map.lanes[pathNum - 1]) || map; }
 
 function spawnEnemy(type, pathNum = 1, startS = 0) {
   const def = ENEMY_TYPES[type];
@@ -2047,18 +2058,14 @@ function drawBase(map) {
   ctx.restore();
 }
 
-// The spawn point — an alien mothership hovering just off the lane,
-// dispatching ships down a tractor beam onto the path.
-// The spawn point is a Dreadnought "carrier" mothership that enemies pour
-// out of — no more pink saucer portal. On a boss wave the carrier IS the
-// boss: once a boss/superboss for this lane is on the board it has undocked
-// and rolled out, so we stop drawing the stationary carrier for that lane.
+// The spawn point is a Dreadnought "carrier" that hovers ABOVE the lane and
+// drops ships onto it (they materialise in the emergence pool below it — see
+// the fade-in in drawEnemy), replacing the old pink saucer portal. On a boss
+// wave the carrier IS the boss: it rolls in from off-board (s 0) toward the
+// carrier's dock (~s 0.9); we keep drawing the carrier until the boss reaches
+// it — animating a launch build-up (shudder + thruster ignition + glow surge)
+// as it approaches — then hand off to the moving boss for a clean undock.
 function drawPortal(map, lane) {
-  // The carrier's boss, if it has spawned. It rolls in from off-board (s 0)
-  // toward the carrier's dock (~s 1.0). We keep drawing the carrier until
-  // the boss reaches the dock, animating a launch build-up as it approaches
-  // (shake + thruster ignition + glow surge), then hand off to the moving
-  // boss for a clean "undock" instead of an instant blink.
   const boss = enemies.find((e) => !e.dead && e.path === lane &&
     (e.type === 'boss' || e.type === 'superboss'));
   if (boss && boss.s >= 0.9) return;      // undocked — the boss IS the carrier now
@@ -2073,15 +2080,38 @@ function drawPortal(map, lane) {
   const r = cell * (isFinale ? 0.95 : 0.8) * (1 + charge * 0.08);
 
   const t = performance.now() / 1000;
-  const p = pathPoint(map, 1.0);          // just inside the board entrance
-  const bob = Math.sin(t * 1.6) * cell * 0.06;
+  const p = pathPoint(map, 0.9);          // where ships emerge onto the lane
+  const sx = px(p.x), sy = py(p.y);       // spawn point, down on the road
+  const hover = cell * (1.15 + Math.sin(t * 1.6) * 0.05);
   const jx = charge * cell * 0.06 * Math.sin(t * 47); // launch shudder
   const jy = charge * cell * 0.06 * Math.cos(t * 41);
+  const cx = sx + jx, cy = sy - hover + jy;           // carrier hovers above
+
+  // deploy beam: a soft column of light from the carrier's belly down to the
+  // lane, so ships read as dropping OUT of the carrier onto the road
+  const beam = ctx.createLinearGradient(cx, cy, sx, sy);
+  beam.addColorStop(0, 'rgba(255,90,120,' + (0.3 + charge * 0.3) + ')');
+  beam.addColorStop(1, 'rgba(255,90,120,0)');
+  ctx.fillStyle = beam;
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.45, cy);
+  ctx.lineTo(cx + r * 0.45, cy);
+  ctx.lineTo(sx + cell * 0.3, sy);
+  ctx.lineTo(sx - cell * 0.3, sy);
+  ctx.closePath();
+  ctx.fill();
+
+  // emergence pool on the lane where ships materialise
+  const eg = 0.4 + Math.sin(t * 4) * 0.18;
+  const pool = ctx.createRadialGradient(sx, sy, 0, sx, sy, cell * 0.5);
+  pool.addColorStop(0, 'rgba(255,120,150,' + eg + ')');
+  pool.addColorStop(1, 'rgba(255,120,150,0)');
+  ctx.fillStyle = pool;
+  ctx.beginPath(); ctx.arc(sx, sy, cell * 0.5, 0, Math.PI * 2); ctx.fill();
+
   ctx.save();
-  ctx.translate(px(p.x) + jx, py(p.y) + bob + jy);
-
+  ctx.translate(cx, cy);
   const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
-
   // rear thruster ignition — flares up as the carrier powers to launch
   if (charge > 0) {
     const rx = -cos * r * 1.4, ry = -sin * r * 1.4, rr = r * (0.8 + charge);
@@ -2091,18 +2121,6 @@ function drawPortal(map, lane) {
     ctx.fillStyle = rg;
     ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
   }
-
-  // launch-bay bloom at the prow, where ships spill out (surges on launch)
-  const glow = Math.min(1, (0.42 + Math.sin(t * 4) * 0.2) * (1 + charge * 2.5));
-  const gx = cos * r * 1.2, gy = sin * r * 1.2;
-  const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * 1.25);
-  grad.addColorStop(0, 'rgba(255,90,120,' + glow + ')');
-  grad.addColorStop(1, 'rgba(255,90,120,0)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(gx, gy, r * 1.25, 0, Math.PI * 2);
-  ctx.fill();
-
   drawWarship(r, p.angle, edge, core, big);
   ctx.restore();
 }
@@ -2421,21 +2439,6 @@ function drawWarship(r, angle, edgeColor, coreColor, big) {
     ctx.fill();
   }
 
-  // forward weapon prongs (bright, glowing, jutting past the prow)
-  const prong = (yRoot, yTip, xTip) => {
-    ctx.beginPath();
-    ctx.moveTo(r * 0.45, r * yRoot);
-    ctx.lineTo(r * xTip, r * yTip);
-    ctx.lineTo(r * 0.6, r * yRoot * 0.3);
-    ctx.closePath();
-    ctx.fill();
-  };
-  ctx.fillStyle = edgeColor;
-  ctx.shadowColor = edgeColor; ctx.shadowBlur = 12;
-  prong(-0.42, -0.62, 1.95); prong(0.42, 0.62, 1.95);
-  if (big) { prong(-0.8, -1.02, 1.5); prong(0.8, 1.02, 1.5); }
-  ctx.shadowBlur = 0;
-
   // main hull — sleek dark arrow with wings swept BACK (so forward reads
   // clearly), a concave twin-tail rear notch
   ctx.fillStyle = hull;
@@ -2490,6 +2493,11 @@ function drawEnemy(e) {
   ctx.translate(x, y + bob);
   // cloaked phantoms render as a faint shimmer until slowed/revealed
   if (!revealed(e)) ctx.globalAlpha = 0.3 + Math.sin(e.wob * 1.7) * 0.12;
+  // materialise out of the spawn carrier: fade in over the first stretch of
+  // the lane, so ships appear IN the emergence pool below the carrier rather
+  // than sliding on from off the board edge
+  const emerge = Math.min(1, Math.max(0, (e.s - 0.4) / 0.8));
+  if (emerge < 1) ctx.globalAlpha *= emerge;
   ctx.shadowColor = e.def.color;
   ctx.shadowBlur = 12;
   ctx.fillStyle = e.def.color;
@@ -2608,9 +2616,8 @@ function render() {
   for (const p of map.renderPaths) strokeRoad(p, 'glow');
   for (const p of map.renderPaths) strokeRoad(p, 'fill');
   for (const p of map.renderPaths) drawRoadChevrons(p);
-  drawPortal(map, 1);
-  if (map.path2) drawPortal(map.path2, 2); // each lane's own carrier — no overlap concern here
-  drawBase(map); // both lanes converge on the same base — one is enough
+  (map.lanes || [map]).forEach((lane, i) => drawPortal(lane, i + 1)); // each lane's own carrier
+  drawBase(map); // every lane converges on the same base — one is enough
 
   if (state.placing != null) drawGridOverlay();
 
