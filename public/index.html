@@ -19,11 +19,12 @@
 <div id="menu" class="screen">
   <div class="menu-panel">
     <h1 class="title"><span class="t1">STAR</span><span class="t2">DEFENSE</span></h1>
-    <p class="subtitle">Build turrets. Hold the line. Beat all 5 maps.</p>
+    <p class="subtitle">Build turrets. Hold the line. Clear all 40 levels.</p>
 
-    <div class="checkpoint-select" id="mapSelect">
-      <!-- map cards injected by game.js -->
+    <div class="level-grid" id="mapSelect">
+      <!-- level cells injected by game.js -->
     </div>
+    <div class="level-info" id="levelInfo"></div>
 
     <button id="startBtn" class="primary-btn">DEPLOY DEFENSES ▶</button>
 
@@ -44,9 +45,9 @@
       <strong>How to play:</strong> Alien ships fly the glowing lane toward your mothership.
       Pick a turret from the bar below, tap an open tile to build it, then press
       <strong>START WAVE</strong>. Kills earn Space Bucks — spend them on more turrets and upgrades.
-      Each map is 30 waves and your defense stays put the whole run; enemies grow relentlessly
+      Each level is 30 waves and your defense stays put the whole run; enemies grow relentlessly
       stronger, so upgrade your turrets (tap one you've built) or the late waves will walk
-      through them. Survive wave 30 to clear the map and unlock the next.
+      through them. Survive wave 30 to clear the level and unlock the next.
       Lose all 20 shields and the fleet breaks through.
     </div>
   </div>

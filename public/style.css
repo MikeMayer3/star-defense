@@ -130,6 +130,51 @@ canvas {
 .cp-name { font-weight: 700; letter-spacing: 1px; font-size: 0.82rem; margin-bottom: 2px; }
 .cp-desc { font-size: 0.66rem; color: #9fb6d9; }
 
+/* ============ LEVEL SELECT (numbered scrollable grid) ============ */
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 6px;
+  max-height: 176px;
+  overflow-y: auto;
+  padding: 4px 6px;
+  margin-bottom: 6px;
+}
+.level-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255,255,255,0.14);
+  border-radius: 9px;
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.level-cell:hover:not(.locked) { border-color: var(--neon-cyan); transform: translateY(-1px); }
+.level-cell.beaten { border-color: rgba(93,255,176,0.5); }
+.level-cell.checkpoint { border-color: rgba(255,231,75,0.55); }
+.level-cell.selected {
+  border-color: var(--neon-pink);
+  background: rgba(255, 78, 203, 0.14);
+  box-shadow: 0 0 14px rgba(255, 78, 203, 0.4);
+}
+.level-cell.locked { opacity: 0.4; cursor: not-allowed; }
+.lc-num { font-weight: 800; font-size: 0.82rem; color: #dceaff; }
+.lc-badge { position: absolute; top: 1px; right: 3px; font-size: 0.55rem; line-height: 1; }
+.level-info {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #b9d0f0;
+  margin-bottom: 14px;
+  min-height: 1em;
+}
+
 .primary-btn {
   background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
   border: none;

@@ -329,7 +329,9 @@ const SECTOR_BACKDROPS = [
 ];
 function currentBackdrop() {
   const idx = state.mode === 'menu' ? state.mapSelect : state.mapIndex;
-  return SECTOR_BACKDROPS[idx] || SECTOR_BACKDROPS[0];
+  // cycle the hand-tuned backdrops across all levels so each sector still has
+  // its own look without needing a bespoke entry per level
+  return SECTOR_BACKDROPS[idx % SECTOR_BACKDROPS.length];
 }
 
 function drawPlanet() {
@@ -498,31 +500,60 @@ function drawStarfield(dt) {
    between cell centers. Off-board waypoints (-1 / 22) make ships fly in
    from and out past the board edge.
    ====================================================================== */
-// Maps are shorter and more distinct-shaped than the campaign's original
-// set, sized for the smaller 18x11 grid. Gauntlet is the one dual-spawn
-// map (wp2): two independent lanes enter from opposite sides and share a
-// final trunk into the same base — see buildPath()/render() below for how
-// a second path piggybacks on all the normal single-path machinery.
-// Ordered easiest to hardest layout — Corridor/Serpent/Switchback/Zigzag
-// were originally listed in the reverse of their actual difficulty, so the
-// per-map scaling (MAP_MULT/MAP_START_MONEY, both index-driven) didn't
-// line up with how hard each layout actually plays. Gauntlet stays last as
-// the finale regardless.
-const MAPS = [
-  { name: 'Zigzag',     wp: [[-1, 9], [4, 9], [4, 2], [8, 2], [8, 9], [12, 9], [12, 2], [18, 2]] },
-  { name: 'Switchback', wp: [[-1, 1], [11, 1], [11, 4], [3, 4], [3, 7], [11, 7], [11, 9], [18, 9]] },
-  { name: 'Serpent',    wp: [[-1, 3], [5, 3], [5, 8], [12, 8], [12, 2], [18, 2]] },
-  { name: 'Corridor',   wp: [[-1, 2], [10, 2], [10, 7], [18, 7]] },
-  {
-    // symmetric 3-lane finale: three spawn lanes at rows 2 / 5 / 8 (mirrored
-    // about the middle row 5), all merging at col 9 and exiting right along
-    // the middle row into Earth
-    name: 'Gauntlet',
-    wp:  [[-1, 2], [9, 2], [9, 5], [18, 5]], // top lane
-    wp2: [[-1, 5], [9, 5], [18, 5]],         // middle lane — straight down the exit row
-    wp3: [[-1, 8], [9, 8], [9, 5], [18, 5]], // bottom lane
-  },
-];
+// The campaign is LEVEL_COUNT numbered levels. Most are procedurally
+// generated serpentine layouts (deterministic per index, so everyone's
+// "Level 23" is identical); a handful of hand-crafted layouts are folded in
+// at set indices for variety. The last level is the symmetric dual-lane
+// Super Dreadnought finale.
+const LEVEL_COUNT = 40;
+
+// Seeded serpentine generator: an x-monotonic path (x only ever increases)
+// so it can never self-cross. It enters at the left edge, makes `turns`
+// vertical jogs at evenly spread columns, and exits at the right edge. Turn
+// count grows with the level index, so later levels are longer and jaggier.
+function genLayout(i) {
+  const rng = mulberry32((((i + 1) * 2654435761) >>> 0));
+  const minR = 2, maxR = ROWS - 3;           // rows 2..8 — leaves carrier headroom
+  const turns = Math.min(2 + Math.floor(i / 5), 6);
+  const wp = [];
+  let r = minR + ((rng() * (maxR - minR + 1)) | 0);
+  wp.push([-1, r]);
+  for (let k = 0; k < turns; k++) {
+    const x = Math.round(2 + (k + 1) * (COLS - 4) / (turns + 1)); // spread cols 2..COLS-2
+    wp.push([x, r]);
+    let nr, tries = 0;
+    do { nr = minR + ((rng() * (maxR - minR + 1)) | 0); }
+    while (Math.abs(nr - r) < 3 && ++tries < 24); // meaningful vertical jog
+    wp.push([x, nr]);
+    r = nr;
+  }
+  wp.push([COLS, r]);                          // exit off the right edge
+  return wp;
+}
+
+// Hand-crafted layouts folded into the numbered set at these indices; every
+// other index (except the finale) is generated.
+const HANDCRAFTED = new Map([
+  [1,  [[-1, 2], [10, 2], [10, 7], [18, 7]]],                                  // Corridor
+  [5,  [[-1, 3], [5, 3], [5, 8], [12, 8], [12, 2], [18, 2]]],                  // Serpent
+  [12, [[-1, 9], [4, 9], [4, 2], [8, 2], [8, 9], [12, 9], [12, 2], [18, 2]]],  // Zigzag
+  [19, [[-1, 1], [11, 1], [11, 4], [3, 4], [3, 7], [11, 7], [11, 9], [18, 9]]],// Switchback
+]);
+
+const MAPS = [];
+for (let i = 0; i < LEVEL_COUNT; i++) {
+  const m = { name: 'Level ' + (i + 1) };
+  if (i === LEVEL_COUNT - 1) {
+    // symmetric dual-lane finale: top (row 2) and bottom (row 8) lanes,
+    // mirrored about the middle row 5, merging at col 9 and exiting right
+    // along that middle row into Earth
+    m.wp = [[-1, 2], [9, 2], [9, 5], [18, 5]];
+    m.wp2 = [[-1, 8], [9, 8], [9, 5], [18, 5]];
+  } else {
+    m.wp = HANDCRAFTED.get(i) || genLayout(i);
+  }
+  MAPS.push(m);
+}
 
 // Turns a waypoint list into the {pts, segLen, totalLen, cells} shape that
 // pathPoint()/strokeRoad()/drawPortal()/drawBase() all just need duck-typed —
@@ -703,15 +734,16 @@ const ENEMY_TYPES = {
                trait: 'The campaign\'s flagship threat. Splits into two full-strength Dreadnoughts on death — killing it is only half the fight.' },
 };
 
-/* Difficulty scaling. HP grows quadratically within a map so a board of
+/* Difficulty scaling. HP grows quadratically within a level so a board of
    never-upgraded cheap towers starts leaking around wave 15 — upgrading
    (or buying the expensive types) is the only way through the back half.
-   Later maps stack a flat multiplier on top; starting credits rise a bit
-   to keep wave 1 buildable. */
+   Later levels stack a flat multiplier on top (levelMult ramps 1x → ~4x
+   across the campaign); starting credits rise with it to keep wave 1
+   buildable. Both are index formulas so any LEVEL_COUNT works. */
 const TOTAL_WAVES = 30;
-const MAP_MULT = [1, 1.25, 1.55, 1.8, 2.1];
-const MAP_START_MONEY = [220, 280, 340, 410, 480];
-function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * MAP_MULT[state.mapIndex]; }
+function levelMult(i) { return 1 + 3.0 * i / (LEVEL_COUNT - 1); }          // 1.0 → 4.0
+function levelStartMoney(i) { return Math.round(200 * levelMult(i)) + 20; } // 220 → 820
+function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex); }
 function speedMult(w) { return 1 + 0.005 * w; }
 function rewardMult(w) { return 1 + 0.03 * w; }
 
@@ -1591,28 +1623,32 @@ function buildMapCards() {
     const prog = mapProgress[i];
     const beaten = !!(prog && prog.beaten);
     const cp = unlocked ? loadMapCheckpoint(i) : null;
-    const card = document.createElement('div');
-    card.className = 'cp-card' + (unlocked ? '' : ' locked') + (state.mapSelect === i && unlocked ? ' selected' : '');
-    let desc;
-    if (!unlocked) desc = 'clear ' + MAPS[i - 1].name;
-    else if (beaten) desc = '★ cleared';
-    else if (cp) desc = 'checkpoint — wave ' + cp.wave;
-    else if (prog && prog.best > 0) desc = 'best wave ' + prog.best;
-    else desc = TOTAL_WAVES + ' waves';
-    card.innerHTML =
-      '<div class="cp-icon">' + (beaten ? '⭐' : unlocked ? '🛰️' : '🔒') + '</div>' +
-      '<div class="cp-name">' + m.name.toUpperCase() + '</div>' +
-      '<div class="cp-desc">' + desc + '</div>';
-    if (unlocked) {
-      card.addEventListener('click', () => {
-        state.mapSelect = i;
-        buildMapCards();
-      });
-    }
-    wrap.appendChild(card);
+    const cell = document.createElement('div');
+    cell.className = 'level-cell' + (unlocked ? '' : ' locked') + (beaten ? ' beaten' : '') +
+      (cp ? ' checkpoint' : '') + (state.mapSelect === i && unlocked ? ' selected' : '');
+    const badge = beaten ? '★' : cp ? '◈' : !unlocked ? '🔒' : '';
+    cell.innerHTML = '<span class="lc-num">' + (i + 1) + '</span>' +
+      (badge ? '<span class="lc-badge">' + badge + '</span>' : '');
+    if (unlocked) cell.addEventListener('click', () => { state.mapSelect = i; buildMapCards(); });
+    wrap.appendChild(cell);
   });
+  // selected-level detail line
+  {
+    const prog = mapProgress[state.mapSelect];
+    const cp = loadMapCheckpoint(state.mapSelect);
+    let detail;
+    if (prog && prog.beaten) detail = '★ cleared';
+    else if (cp) detail = 'checkpoint — wave ' + cp.wave;
+    else if (prog && prog.best > 0) detail = 'best wave ' + prog.best;
+    else detail = TOTAL_WAVES + ' waves';
+    const info = $('levelInfo');
+    if (info) info.textContent = 'LEVEL ' + (state.mapSelect + 1) +
+      (state.mapSelect === LEVEL_COUNT - 1 ? ' — FINAL' : '') + ' · ' + detail;
+  }
   $('bestStats').textContent =
-    'Maps cleared: ' + mapsBeaten() + ' / ' + MAPS.length + '  •  High Score: ' + state.hiScore.toLocaleString();
+    'Levels cleared: ' + mapsBeaten() + ' / ' + LEVEL_COUNT + '  •  High Score: ' + state.hiScore.toLocaleString();
+  const sel = wrap.querySelector('.level-cell.selected');
+  if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 
 function startGame(mapIdx) {
@@ -1622,7 +1658,7 @@ function startGame(mapIdx) {
   state.mode = 'playing';
   state.phase = 'build';
   state.level = cp ? cp.wave : 1;
-  state.money = DEBUG ? 999999 : (cp ? cp.money : MAP_START_MONEY[mapIdx]);
+  state.money = DEBUG ? 999999 : (cp ? cp.money : levelStartMoney(mapIdx));
   state.lives = cp ? cp.lives : 20;
   state.score = 0;
   state.kills = 0;
