@@ -738,7 +738,9 @@ let arsenalOverride = (() => {
 })();
 function arsenalFor(mapIdx) {
   if (arsenalOverride != null) return arsenalOverride;
-  return (mapIdx >= 20 && mapIdx <= 29) ? 2 : 0;
+  if (mapIdx >= 10 && mapIdx <= 19) return 1; // Directed Energy
+  if (mapIdx >= 20 && mapIdx <= 29) return 2; // Gravitics
+  return 0;                                   // Ballistic (acts I and IV)
 }
 // Sets that actually have towers built — the picker must not offer an empty shop.
 function builtArsenals() {
@@ -764,9 +766,12 @@ const TOWER_TYPES = [
     set: 0, id: 'mortar', name: 'Plasma Mortar', icon: '💥', color: '#ff4ecb', glow: 'rgba(255,78,203,0.45)',
     desc: 'Splash — wipes whole clusters, weak on lone tanks', cost: 160, dmg: 50, rate: 0.55, range: 3.7, upCost: [130, 375],
   },
+  // Tesla lives in Directed Energy, not Ballistic — chain lightning is that
+  // act's signature, and it fills the rapid/anti-pack slot there. Retuned
+  // from its old $220 premium price into DE's $110 rapid role.
   {
-    set: 0, id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
-    desc: 'Lightning arcs through a whole pack at once', cost: 220, dmg: 30, rate: 1.15, range: 2.8, upCost: [175, 510],
+    set: 1, id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
+    desc: 'Lightning arcs through a whole pack at once', cost: 110, dmg: 15, rate: 2.0, range: 2.6, upCost: [85, 250],
   },
   {
     set: 0, id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
@@ -776,6 +781,33 @@ const TOWER_TYPES = [
     set: 0, id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
     desc: 'Boosts damage & fire rate nearby', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 315],
     buffDmg: 0.15, buffRate: 0.15,
+  },
+
+  /* ---------- Set 1 · Directed Energy (levels 11-20) ----------
+     Beams, arcs and heat. Where Ballistic fires discrete shots and Gravitics
+     moves ships around, this act is about SUSTAIN: damage that builds the
+     longer you hold one target, fields that are always on, and a support
+     tower that pulses instead of buffing flatly. */
+  {
+    set: 1, id: 'spark', name: 'Spark Turret', icon: '✨', color: '#7fe3ff', glow: 'rgba(127,227,255,0.45)',
+    desc: 'Cheap zapper — every 5th shot arcs to a second ship', cost: 50, dmg: 17, rate: 1.6, range: 2.9, upCost: [40, 120],
+  },
+  {
+    set: 1, id: 'staticfield', name: 'Static Field', icon: '🌐', color: '#8affe0', glow: 'rgba(138,255,224,0.45)',
+    desc: 'EM field — slows, ionizes cloaks, strips shields & douses fire', cost: 80, dmg: 6, rate: 1.1, range: 2.5, upCost: [65, 185],
+  },
+  {
+    set: 1, id: 'pylon', name: 'Overclock Pylon', icon: '📡', color: '#ffd36e', glow: 'rgba(255,211,110,0.45)',
+    desc: 'Pulses nearby turrets to overdrive, then lets them cool', cost: 140, dmg: 0, rate: 0, range: 3.9, upCost: [110, 315],
+    overclock: true,
+  },
+  {
+    set: 1, id: 'beamlance', name: 'Beam Lance', icon: '🔆', color: '#ff7ae0', glow: 'rgba(255,122,224,0.45)',
+    desc: 'Sustained beam — damage ramps the longer it holds a target', cost: 190, dmg: 15, rate: 4, range: 3.2, upCost: [150, 400],
+  },
+  {
+    set: 1, id: 'prism', name: 'Prism Refractor', icon: '🔮', color: '#c9a5ff', glow: 'rgba(201,165,255,0.45)',
+    desc: 'Beam splits on impact — reaches ships buried mid-pack', cost: 320, dmg: 70, rate: 0.55, range: 4.2, upCost: [255, 735],
   },
 
   /* ---------- Set 2 · Gravitics (levels 21-30) ----------
@@ -830,6 +862,13 @@ function towerStats(t) {
     chains: 3 + l,                // tesla (extra jumps beyond first target)
     buffDmg: ty.buffDmg ? ty.buffDmg + 0.05 * l : 0,   // beacon
     buffRate: ty.buffRate ? ty.buffRate + 0.05 * l : 0, // beacon
+    // --- Directed Energy ---
+    arcFrac: 0.6 + 0.05 * l,      // spark: damage of the every-5th-shot arc
+    ramp: 0.55 + 0.2 * l,         // beam lance: extra dmg/sec of sustained fire
+    rampCap: 3.0 + 0.5 * l,       // beam lance: seconds until the ramp maxes out
+    splits: 2 + l,                // prism: sub-beams thrown off the first hit
+    splitFrac: 0.55 + 0.05 * l,   // prism: damage of each sub-beam
+    overclockRate: 0.95 + 0.25 * l, // pylon: fire-rate boost during its burst window
     // --- Gravitics ---
     push: 0.18 + 0.05 * l,        // mass driver: cells shoved back per hit
     pull: 0.30 + 0.08 * l,        // singularity: cells dragged toward the well per pulse
@@ -1306,6 +1345,68 @@ function fireTower(t, st, target) {
       Sound.shotTesla();
       break;
     }
+    /* ---------- Directed Energy ---------- */
+    case 'spark': {
+      // Cheap zapper. Every 5th shot is "charged" and jumps to a second ship
+      // on impact, so it out-performs a plain blaster against loose pairs.
+      t.shots = (t.shots || 0) + 1;
+      const charged = t.shots % 5 === 0;
+      bolts.push({ x: t.x, y: t.y, target, speed: 12, dmg: st.dmg, color: ty.color, r: 0.09,
+                   arc: charged ? st.dmg * st.arcFrac : 0 });
+      Sound.shotBlaster();
+      break;
+    }
+    case 'staticfield': {
+      // Always-on EM field. Like Frost it's an aura (no lock needed, so it
+      // catches cloaked ships), and the `true` flag marks it as a fire-shield
+      // quencher. Each pulse is a discrete hit, so it also eats a Warden
+      // shield charge per tick — this act's answer to shields.
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - t.x, e.y - t.y) > st.range) continue;
+        damageEnemy(e, st.dmg, ty.color, true);
+        if (!e.dead) {
+          e.slowPct = Math.max(e.slowPct * (state.waveTime < e.slowUntil ? 1 : 0), st.slowPct);
+          e.slowUntil = state.waveTime + st.slowDur;
+        }
+      }
+      fx.push({ kind: 'ring', x: t.x, y: t.y, life: 0.3, maxLife: 0.3, r: st.range, color: ty.color });
+      Sound.shotFrost();
+      break;
+    }
+    case 'beamlance': {
+      // Sustained beam: ticks fast, and each tick hits harder the longer it
+      // has held THIS target (t.beamTime, reset in the tower loop when the
+      // target changes). Ramped ticks are what let it punch through Aegis
+      // armor, which shrugs off small rapid hits.
+      const ramped = st.dmg * (1 + st.ramp * Math.min(t.beamTime || 0, st.rampCap));
+      damageEnemy(target, ramped, ty.color);
+      fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: target.x, y2: target.y, life: 0.1, color: ty.color });
+      Sound.shotRail();
+      break;
+    }
+    case 'prism': {
+      // Heavy beam that refracts: full damage to the primary target, then
+      // sub-beams thrown off it into the nearest other ships — so it reaches
+      // Menders and anything else buried behind a screen.
+      damageEnemy(target, st.dmg, ty.color);
+      fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: target.x, y2: target.y, life: 0.14, color: ty.color });
+      const hit = new Set([target]);
+      for (let i = 0; i < st.splits; i++) {
+        let next = null, bd = 2.6;
+        for (const e of enemies) {
+          if (e.dead || hit.has(e)) continue;
+          const d = Math.hypot(e.x - target.x, e.y - target.y);
+          if (d < bd) { bd = d; next = e; }
+        }
+        if (!next) break;
+        hit.add(next);
+        damageEnemy(next, st.dmg * st.splitFrac, ty.color);
+        fx.push({ kind: 'beam', x1: target.x, y1: target.y, x2: next.x, y2: next.y, life: 0.14, color: ty.color });
+      }
+      Sound.shotRail();
+      break;
+    }
     /* ---------- Gravitics ---------- */
     case 'massdriver':
       // like a blaster bolt, but the slug carries momentum: on impact it
@@ -1650,9 +1751,14 @@ function hideDragGhost() { dragGhostEl.classList.add('hidden'); }
 function buildShopCards() {
   towerCardsEl.innerHTML = '';
   const set = activeArsenal();
-  TOWER_TYPES.forEach((ty, i) => {
-    if (ty.hidden) return;
-    if (ty.set !== set) return; // only this act's arsenal is for sale
+  // Sorted by price, not by array order, so every act's shop reads
+  // cheap -> expensive (array order is fixed by index stability, and Tesla
+  // in particular sits at an old Ballistic index while selling in Act II).
+  TOWER_TYPES
+    .map((ty, i) => ({ ty, i }))
+    .filter(({ ty }) => !ty.hidden && ty.set === set)
+    .sort((a, b) => a.ty.cost - b.ty.cost)
+    .forEach(({ ty, i }) => {
     const card = document.createElement('div');
     card.className = 'tower-card';
     card.style.setProperty('--tc', ty.color);
@@ -1758,6 +1864,8 @@ function openUpgradePanel(t) {
   $('upName').textContent = ty.icon + ' ' + ty.name + ' — LVL ' + t.level;
   $('upStats').textContent = ty.id === 'beacon'
     ? 'DMG +' + Math.round(st.buffDmg * 100) + '% · RATE +' + Math.round(st.buffRate * 100) + '% · RNG ' + st.range.toFixed(1)
+    : ty.overclock
+    ? 'BURST RATE +' + Math.round(st.overclockRate * 100) + '% · PULSED · RNG ' + st.range.toFixed(1)
     : ty.suppressor
     ? 'NO HEAL · NO ARMOR · DOUSES FIRE · RNG ' + st.range.toFixed(1)
     : 'DMG ' + Math.round(st.dmg) + ' · RATE ' + st.rate.toFixed(1) + '/s · RNG ' + st.range.toFixed(1);
@@ -1889,7 +1997,9 @@ window.addEventListener('keydown', (ev) => {
   // TOWER_TYPES — the shop only shows the current act's arsenal
   const n = parseInt(ev.key, 10);
   if (n >= 1) {
-    const offered = TOWER_TYPES.map((ty, i) => ({ ty, i })).filter(({ ty }) => !ty.hidden && ty.set === activeArsenal());
+    const offered = TOWER_TYPES.map((ty, i) => ({ ty, i }))
+      .filter(({ ty }) => !ty.hidden && ty.set === activeArsenal())
+      .sort((a, b) => a.ty.cost - b.ty.cost); // same order the shop shows
     const pick = offered[n - 1];
     if (pick) {
       closeUpgradePanel();
@@ -2232,10 +2342,17 @@ function update(dt) {
 
   // towers
   const beacons = towers.filter((t) => TOWER_TYPES[t.type].id === 'beacon');
+  // Overclock Pylon: instead of a flat aura it PULSES — a burst window where
+  // covered turrets fire far faster, then a cooldown window with no help at
+  // all. Averages out near a Beacon's steady boost but gives the act its own
+  // rhythm (and makes placement about which turrets you want spiking).
+  const pylons = towers.filter((t) => TOWER_TYPES[t.type].overclock);
+  const OC_PERIOD = 4.0, OC_BURST = 2.4;
+  const ocActive = (state.waveTime % OC_PERIOD) < OC_BURST;
   for (const t of towers) {
     const tty = TOWER_TYPES[t.type];
-    // pure support — never targets or fires (Beacon buffs, Anchor suppresses)
-    if (tty.id === 'beacon' || tty.suppressor) continue;
+    // pure support — never targets or fires
+    if (tty.id === 'beacon' || tty.suppressor || tty.overclock) continue;
     t.cool -= dt;
     const st = towerStats(t);
     // Command Beacon aura: deliberately does NOT stack — only the single
@@ -2252,6 +2369,18 @@ function update(dt) {
       if (bst.buffRate > bestBuffRate) bestBuffRate = bst.buffRate;
       t.buffed = true;
     }
+    // Pylons only help during their burst window; like beacons they don't
+    // stack, so only the strongest in range applies.
+    if (ocActive) {
+      let bestOc = 0;
+      for (const p of pylons) {
+        const pst = towerStats(p);
+        if (Math.hypot(p.x - t.x, p.y - t.y) > pst.range) continue;
+        if (pst.overclockRate > bestOc) bestOc = pst.overclockRate;
+        t.buffed = true;
+      }
+      bestBuffRate = Math.max(bestBuffRate, bestOc);
+    }
     st.dmg *= 1 + bestBuffDmg;
     st.rate *= 1 + bestBuffRate;
     // Cloak defeats a targeting lock, not an area/field weapon — Frost's
@@ -2262,15 +2391,34 @@ function update(dt) {
     // actively expose cloaks. Every arsenal needs at least one, or Phantom
     // levels are unplayable with that toolbox.
     const seesCloaked = tty.id === 'frost' || tty.id === 'mortar' || tty.id === 'tesla'
-      || tty.id === 'singularity' || tty.id === 'graviton';
+      || tty.id === 'singularity' || tty.id === 'graviton' || tty.id === 'staticfield';
     let best = null, bestS = -1;
-    for (const e of enemies) {
-      if (e.dead) continue;
-      if (!revealed(e) && !seesCloaked) continue;
-      const d = Math.hypot(e.x - t.x, e.y - t.y);
-      if (d <= st.range && e.s > bestS) { best = e; bestS = e.s; }
+    // Beam Lance holds its current target while that ship is still valid,
+    // instead of re-picking the furthest-along one every frame. Without this
+    // each new spawn overtakes the old target, the lock churns, and the ramp
+    // (the whole point of the tower) never gets to build.
+    const sticky = tty.id === 'beamlance' && t.lastTarget && !t.lastTarget.dead
+      && (revealed(t.lastTarget) || seesCloaked)
+      && Math.hypot(t.lastTarget.x - t.x, t.lastTarget.y - t.y) <= st.range;
+    if (sticky) {
+      best = t.lastTarget;
+    } else {
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (!revealed(e) && !seesCloaked) continue;
+        const d = Math.hypot(e.x - t.x, e.y - t.y);
+        if (d <= st.range && e.s > bestS) { best = e; bestS = e.s; }
+      }
     }
     t.target = best;
+    // Beam Lance charge-up: damage ramps while it stays on ONE ship, and
+    // resets the moment it switches (or loses its target), so it rewards a
+    // long clear firing lane and is punished by churn.
+    if (tty.id === 'beamlance') {
+      if (best && best === t.lastTarget) t.beamTime = (t.beamTime || 0) + dt;
+      else t.beamTime = 0;
+      t.lastTarget = best;
+    }
     if (best) {
       t.angle = Math.atan2(best.y - t.y, best.x - t.x);
       if (t.cool <= 0) { fireTower(t, st, best); t.cool = 1 / st.rate; }
@@ -2290,6 +2438,19 @@ function update(dt) {
       if (b.slowPct && !tg.dead) {
         tg.slowPct = Math.max(tg.slowPct * (state.waveTime < tg.slowUntil ? 1 : 0), b.slowPct);
         tg.slowUntil = state.waveTime + b.slowDur;
+      }
+      // Spark Turret's charged shot: arc off the target into a nearby ship.
+      if (b.arc) {
+        let next = null, bd = 2.2;
+        for (const e of enemies) {
+          if (e.dead || e === tg) continue;
+          const d = Math.hypot(e.x - tg.x, e.y - tg.y);
+          if (d < bd) { bd = d; next = e; }
+        }
+        if (next) {
+          damageEnemy(next, b.arc, b.color);
+          fx.push({ kind: 'chain', pts: [{ x: tg.x, y: tg.y }, { x: next.x, y: next.y }], life: 0.14, color: b.color });
+        }
       }
       // Mass Driver knockback: shove the ship back along its own lane.
       // Never past the spawn, and bosses are too massive to budge (otherwise
@@ -2645,6 +2806,81 @@ function drawTurretShape(g, ty, s, blur = 10) {
       ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color, g);
       circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff', g);
       break;
+    /* ---------- Directed Energy ---------- */
+    case 'spark': {
+      // small emitter throwing a four-point spark
+      circle(0, 0, s * 0.26, ty.color, g);
+      star(4, s * 0.6, s * 0.14, ty.color, g);
+      circle(0, 0, s * 0.11, '#ffffff', g);
+      break;
+    }
+    case 'staticfield': {
+      // a caged field emitter: orbital rings around a bright core
+      g.strokeStyle = ty.color;
+      g.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        g.save();
+        g.rotate((i / 3) * Math.PI);
+        g.beginPath();
+        g.ellipse(0, 0, s * 0.52, s * 0.2, 0, 0, Math.PI * 2);
+        g.stroke();
+        g.restore();
+      }
+      circle(0, 0, s * 0.18, ty.color, g);
+      circle(0, 0, s * 0.08, '#ffffff', g);
+      break;
+    }
+    case 'pylon': {
+      // broadcast dish on a mast, with a pulse arc that swells as it fires
+      const ph = (performance.now() / 1000) % 4 / 4;
+      g.fillStyle = ty.color;
+      g.fillRect(-s * 0.07, -s * 0.1, s * 0.14, s * 0.62);
+      g.save();
+      g.rotate(-0.6);
+      g.beginPath();
+      g.ellipse(0, -s * 0.2, s * 0.42, s * 0.2, 0, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+      g.strokeStyle = ty.color;
+      g.globalAlpha = Math.max(0, 1 - ph * 1.6);
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, -s * 0.15, s * (0.35 + ph * 0.5), Math.PI * 1.15, Math.PI * 1.85);
+      g.stroke();
+      g.globalAlpha = 1;
+      break;
+    }
+    case 'beamlance': {
+      // long focusing barrel with a stack of charge rings behind the emitter
+      g.fillStyle = ty.color;
+      g.fillRect(-s * 0.1, -s * 0.08, s * 0.9, s * 0.16);
+      for (let i = 0; i < 3; i++) {
+        ringDonut(-s * 0.05 + i * s * 0.2, 0, s * (0.22 - i * 0.04), s * 0.05, ty.color, g);
+      }
+      circle(s * 0.82, 0, s * 0.1, '#ffffff', g);
+      break;
+    }
+    case 'prism': {
+      // a crystal that splits an incoming line into three outgoing ones
+      g.save();
+      g.rotate(Math.PI / 4);
+      roundRect(-s * 0.26, -s * 0.26, s * 0.52, s * 0.52, s * 0.07, g);
+      g.fill();
+      g.restore();
+      g.strokeStyle = ty.color;
+      g.lineWidth = 2;
+      for (const a of [-0.5, 0, 0.5]) {
+        g.save();
+        g.rotate(a);
+        g.beginPath();
+        g.moveTo(s * 0.3, 0);
+        g.lineTo(s * 0.85, 0);
+        g.stroke();
+        g.restore();
+      }
+      circle(0, 0, s * 0.1, '#ffffff', g);
+      break;
+    }
     /* ---------- Gravitics ---------- */
     case 'massdriver':
       // squat rail block with a heavy slug seated in the muzzle
@@ -2800,6 +3036,7 @@ function drawTower(t) {
   const AURA_RGB = {
     frost: '159, 216, 255', beacon: '255, 170, 51',
     singularity: '162, 75, 255', anchor: '75, 255, 213',
+    staticfield: '138, 255, 224', pylon: '255, 211, 110',
   };
   if (AURA_RGB[ty.id]) {
     const rng = towerStats(t).range;
