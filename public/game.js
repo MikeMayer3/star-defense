@@ -545,10 +545,13 @@ for (let i = 0; i < LEVEL_COUNT; i++) {
   const m = { name: 'Level ' + (i + 1) };
   if (i === LEVEL_COUNT - 1) {
     // symmetric dual-lane finale: top (row 2) and bottom (row 8) lanes,
-    // mirrored about the middle row 5, merging at col 9 and exiting right
-    // along that middle row into Earth
-    m.wp = [[-1, 2], [9, 2], [9, 5], [18, 5]];
-    m.wp2 = [[-1, 8], [9, 8], [9, 5], [18, 5]];
+    // mirrored about the middle row 5, merging at col 6 and exiting right
+    // along that middle row into Earth. The merge sits left-of-center so
+    // the shared trunk is long enough to actually defend — with a late
+    // merge the beatability sim showed enemies spent too little time under
+    // fire for ANY board to clear the back waves.
+    m.wp = [[-1, 2], [6, 2], [6, 5], [18, 5]];
+    m.wp2 = [[-1, 8], [6, 8], [6, 5], [18, 5]];
   } else {
     m.wp = HANDCRAFTED.get(i) || genLayout(i);
   }
@@ -720,17 +723,23 @@ const ENEMY_TYPES = {
              trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
   shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'diamond', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
              trait: 'Energy shield blocks the first hits outright — rapid fire strips it, heavy shots are wasted on it.' },
-  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'pentagon', armor: 6, debutMap: 1, debutWave: 8, announce: true,
+  // debutMap indices spread the special threats across the 40-level
+  // campaign (levels 7 / 14 / 21) instead of the old 5-map spacing
+  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'pentagon', armor: 6, debutMap: 6, debutWave: 8, announce: true,
              trait: 'Plating deflects flat damage from every hit — light rounds bounce off, heavy shots punch through.' },
-  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'ring', cloak: true, debutMap: 2, debutWave: 8, announce: true,
+  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'ring', cloak: true, debutMap: 13, debutWave: 8, announce: true,
              trait: 'Cloaked — turrets can\'t lock on until it\'s slowed. Frost sees through the cloak.' },
-  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 3, debutWave: 8, announce: true,
+  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 20, debutWave: 8, announce: true,
              trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
-  boss:    { name: 'Dreadnought', icon: '☠', hp: 1500, speed: 0.7, reward: 150, leak: 10, radius: 0.55, color: '#ff5566', shape: 'boss', debutMap: 0, debutWave: 10,
+  // Boss leak costs are budgeted against the 20-life bar: late-campaign
+  // bosses are tanky enough that one often walks through even a maxed
+  // board, so boss(8) + superboss(10) must stay under 20 or the finale
+  // (where both can leak) becomes mathematically unwinnable.
+  boss:    { name: 'Dreadnought', icon: '☠', hp: 1500, speed: 0.7, reward: 150, leak: 8, radius: 0.55, color: '#ff5566', shape: 'boss', debutMap: 0, debutWave: 10,
              trait: 'Massive command ship. Enrages below half health.' },
   splinter: { name: 'Splinter', icon: '✦', hp: 9, speed: 2.5, reward: 1, leak: 1, radius: 0.16, color: '#ffb37a', shape: 'tri', debutMap: 0, debutWave: 5,
               trait: 'Debris from a shattered Brute — weak alone, dangerous in a pack. Never spawns in a wave directly.' },
-  superboss: { name: 'Super Dreadnought', icon: '☠', hp: 3600, speed: 0.6, reward: 260, leak: 14, radius: 0.85, color: '#c81c46', shape: 'superboss', debutMap: 4, debutWave: 30,
+  superboss: { name: 'Super Dreadnought', icon: '☠', hp: 3600, speed: 0.6, reward: 260, leak: 10, radius: 0.85, color: '#c81c46', shape: 'superboss', debutMap: LEVEL_COUNT - 1, debutWave: 30,
                trait: 'The campaign\'s flagship threat. Splits into two full-strength Dreadnoughts on death — killing it is only half the fight.' },
 };
 
@@ -741,11 +750,26 @@ const ENEMY_TYPES = {
    across the campaign); starting credits rise with it to keep wave 1
    buildable. Both are index formulas so any LEVEL_COUNT works. */
 const TOTAL_WAVES = 30;
-function levelMult(i) { return 1 + 3.0 * i / (LEVEL_COUNT - 1); }          // 1.0 → 4.0
-function levelStartMoney(i) { return Math.round(200 * levelMult(i)) + 20; } // 220 → 820
+// The 2.5x cap is empirical, from a full-sim beatability sweep: a maxed-out
+// board (all tiles worth building on filled, all upgrades bought) clears
+// wave 30 up to roughly a 2.5x HP multiplier, goes borderline around
+// 2.6-2.9x, and cannot win at 3x+ no matter how much money income provides
+// — the board's DPS ceiling is the binding constraint, not economy. So the
+// campaign ramps to just under that ceiling and the last levels are won on
+// tight play rather than being mathematically impossible.
+// The finale gets a reduced multiplier: even with the earlier merge, its
+// dual-lane layout still has less total time-under-fire than a serpentine
+// level, and it ends in the Super Dreadnought fight — layout + boss are its
+// difficulty. 1.8x is the sim-tuned value where a maxed board clears it.
+function levelMult(i) { return i === LEVEL_COUNT - 1 ? 1.8 : 1 + 1.5 * i / (LEVEL_COUNT - 1); }
+function levelStartMoney(i) { return Math.round(200 * levelMult(i)) + 20; } // 220 → 520
 function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex); }
 function speedMult(w) { return 1 + 0.005 * w; }
-function rewardMult(w) { return 1 + 0.03 * w; }
+// Kill rewards also scale partially with the level multiplier (exponent
+// < 1), so mid-campaign economy keeps pace while later levels still bite:
+// at levelMult 2.5x, income is ~1.7x, a net ~1.5x difficulty climb on top
+// of the fixed board ceiling.
+function rewardMult(w) { return (1 + 0.03 * w) * Math.pow(levelMult(state.mapIndex), 0.6); }
 
 // Deterministic per-wave RNG — wave N is always the same wave N, so the
 // build-phase preview matches what actually spawns and retries are fair.
@@ -826,8 +850,9 @@ function buildWave(mapIdx, w) {
   budget -= openN;
   rest(0.8);
 
-  // this map's new enemy debuts as a showcased block
-  const debut = ['shield', 'aegis', 'phantom', 'mender', null][mapIdx];
+  // this level's new enemy debuts as a showcased block (keys match the
+  // types' debutMap indices)
+  const debut = ({ 0: 'shield', 6: 'aegis', 13: 'phantom', 20: 'mender' })[mapIdx];
   if (debut && ENEMY_TYPES[debut].debutMap === mapIdx && w === ENEMY_TYPES[debut].debutWave) {
     if (debut === 'mender') { push('mender'); lineOf('raider', 3); push('mender'); lineOf('raider', 3); }
     else lineOf(debut, 4);
