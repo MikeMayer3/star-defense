@@ -740,7 +740,8 @@ function arsenalFor(mapIdx) {
   if (arsenalOverride != null) return arsenalOverride;
   if (mapIdx >= 10 && mapIdx <= 19) return 1; // Directed Energy
   if (mapIdx >= 20 && mapIdx <= 29) return 2; // Gravitics
-  return 0;                                   // Ballistic (acts I and IV)
+  if (mapIdx >= 30) return 3;                 // Void Xenotech
+  return 0;                                   // Ballistic (act I)
 }
 // Sets that actually have towers built — the picker must not offer an empty shop.
 function builtArsenals() {
@@ -845,6 +846,41 @@ const TOWER_TYPES = [
     // At 240 the arsenal matches Ballistic's benchmark — clears with 20 shields.
     desc: 'Calls down a slug — huge single hit, punches armor', cost: 340, dmg: 240, rate: 0.3, range: 4.0, upCost: [270, 760],
   },
+
+  /* ---------- Set 3 · Void Xenotech (levels 31-40) ----------
+     Reverse-engineered alien tech, and the act that breaks the most rules:
+     weapons that don't need a lock at all (drones, rift zones), a field that
+     switches enemy abilities OFF outright, and marks that make everything
+     else hit harder. This act ends the campaign, so it also has to be able
+     to kill the Super Dreadnought. */
+  {
+    set: 3, id: 'splinter', name: 'Splinter Node', icon: '🔱', color: '#9dff8a', glow: 'rgba(157,255,138,0.45)',
+    desc: 'Shards that fragment onto a new ship whenever they kill', cost: 60, dmg: 19, rate: 1.6, range: 2.9, upCost: [45, 130],
+  },
+  {
+    set: 3, id: 'nullfield', name: 'Null Field', icon: '🕸️', color: '#ff6fa8', glow: 'rgba(255,111,168,0.45)',
+    desc: 'Switches enemy tricks off — cloak, healing, armor, fire shields', cost: 90, dmg: 0, rate: 0, range: 3.6, upCost: [70, 200],
+    suppressor: true, decloak: true,
+  },
+  {
+    set: 3, id: 'hive', name: 'Swarm Hive', icon: '🐝', color: '#ffe066', glow: 'rgba(255,224,102,0.45)',
+    // dmg/rate sim-tuned to sit with the other acts' rapid towers (solo-board
+    // reach w7, same as Gatling); at its first pass it was well under them.
+    desc: 'Launches drones that hunt on their own — no lock needed', cost: 120, dmg: 13, rate: 4.0, range: 2.8, upCost: [95, 270],
+  },
+  {
+    set: 3, id: 'obelisk', name: 'Resonance Obelisk', icon: '🗿', color: '#8ad4ff', glow: 'rgba(138,212,255,0.45)',
+    desc: 'Marks ships: they take more from everything and burst on death', cost: 150, dmg: 11, rate: 1.2, range: 3.1, upCost: [120, 340],
+    marker: true,
+  },
+  {
+    set: 3, id: 'rift', name: 'Rift Cannon', icon: '🌌', color: '#c56bff', glow: 'rgba(197,107,255,0.45)',
+    desc: 'Tears open a rift — anything inside takes mounting damage', cost: 220, dmg: 22, rate: 0.5, range: 3.4, upCost: [175, 500],
+  },
+  {
+    set: 3, id: 'annihilator', name: 'Annihilator', icon: '💀', color: '#ff4f4f', glow: 'rgba(255,79,79,0.45)',
+    desc: 'Charges, then erases everything in a line across the map', cost: 400, dmg: 300, rate: 0.22, range: 5.4, upCost: [320, 900],
+  },
 ];
 
 // Effective stats for a tower instance at its current level.
@@ -869,6 +905,14 @@ function towerStats(t) {
     splits: 2 + l,                // prism: sub-beams thrown off the first hit
     splitFrac: 0.55 + 0.05 * l,   // prism: damage of each sub-beam
     overclockRate: 0.95 + 0.25 * l, // pylon: fire-rate boost during its burst window
+    // --- Void Xenotech ---
+    fragFrac: 0.7 + 0.05 * l,     // splinter: damage of the shard thrown on a kill
+    markAmp: 0.25 + 0.08 * l,     // obelisk: extra damage a marked ship takes
+    markDur: 3.5 + 0.5 * l,       // obelisk: seconds a mark lasts
+    burstFrac: 0.5 + 0.1 * l,     // obelisk: splash damage when a marked ship dies
+    riftDur: 3.0 + 0.5 * l,       // rift: seconds the zone stays open
+    riftRamp: 0.5 + 0.15 * l,     // rift: extra damage/sec the longer it's open
+    riftRadius: 1.15 + 0.15 * l,  // rift: zone size
     // --- Gravitics ---
     push: 0.09 + 0.03 * l,        // mass driver: cells shoved back per hit
     pull: 0.30 + 0.08 * l,        // singularity: cells dragged toward the well per pulse
@@ -1131,6 +1175,7 @@ let grid = {};            // "c,r" -> tower
 let enemies = [];
 let bolts = [];           // homing projectiles
 let shells = [];          // mortar arcs
+let zones = [];           // persistent damage fields (Rift Cannon)
 let fx = [];              // beams / chains / rings
 let parts = [];           // particles
 let floats = [];          // floating texts
@@ -1217,6 +1262,10 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
       return;
     }
   }
+  // Resonance mark: a marked ship takes extra damage from EVERY source, so
+  // the Obelisk's value is multiplying the rest of the board rather than its
+  // own (deliberately small) gun.
+  if (e.markUntil && state.waveTime < e.markUntil) dmg *= 1 + (e.markAmp || 0);
   // Brute fire shield: halves non-Frost damage (so other towers can still
   // grind it down, just slower). A Frost hit extinguishes it for good — the
   // clean counter — and still deals its own damage in full.
@@ -1246,6 +1295,16 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     burst(e.x, e.y, e.def.color, e.type === 'superboss' ? 60 : big ? 40 : 10, e.type === 'superboss' ? 3 : big ? 2.2 : 1);
     if (big) Sound.bigExplosion(); else Sound.explosion();
 
+    // A marked ship detonates when it dies, spraying its resonance into
+    // everything packed around it — the Obelisk's payoff against clumps.
+    if (e.markUntil && state.waveTime < e.markUntil && e.markBurst) {
+      const r = 1.3;
+      fx.push({ kind: 'ring', x: e.x, y: e.y, life: 0.28, maxLife: 0.28, r, color: '#8ad4ff' });
+      for (const o of enemies) {
+        if (o === e || o.dead) continue;
+        if (Math.hypot(o.x - e.x, o.y - e.y) <= r + o.def.radius) damageEnemy(o, e.markBurst, '#8ad4ff');
+      }
+    }
     // Brute cracks apart into a pack of weak Splinters right where it died —
     // the clumped low-HP burst is exactly what splash damage should punish.
     if (e.type === 'brute') {
@@ -1343,6 +1402,64 @@ function fireTower(t, st, target) {
       }
       fx.push({ kind: 'chain', pts: hitPts, life: 0.16, color: ty.color });
       Sound.shotTesla();
+      break;
+    }
+    /* ---------- Void Xenotech ---------- */
+    case 'splinter':
+      // Shards that fragment: when a shard lands the killing blow, it throws
+      // a fresh shard into a nearby ship (see the bolt handler). Against
+      // packed chaff that cascades; against a lone tank it's just a bolt.
+      bolts.push({ x: t.x, y: t.y, target, speed: 12, dmg: st.dmg, color: ty.color, r: 0.09,
+                   frag: st.dmg * st.fragFrac });
+      Sound.shotBlaster();
+      break;
+    case 'hive':
+      // Drones hunt on their own, so they need no targeting lock and will
+      // chase a cloaked ship (see seesCloaked). Many small hits also strip
+      // Warden shield charges quickly.
+      bolts.push({ x: t.x, y: t.y, target, speed: 7.5, dmg: st.dmg, color: ty.color, r: 0.07, drone: true });
+      Sound.shotGatling();
+      break;
+    case 'obelisk': {
+      // Its own gun is deliberately weak — the payload is the mark, which
+      // makes every other tower on the board hit harder and turns the ship
+      // into a bomb when it dies.
+      damageEnemy(target, st.dmg, ty.color);
+      if (!target.dead) {
+        target.markUntil = state.waveTime + st.markDur;
+        target.markAmp = st.markAmp;
+        target.markBurst = st.dmg * st.burstFrac * 4;
+      }
+      fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: target.x, y2: target.y, life: 0.12, color: ty.color });
+      Sound.shotTesla();
+      break;
+    }
+    case 'rift': {
+      // Opens a persistent tear on the lane. Anything inside takes mounting
+      // damage for as long as it stays — it punishes clumps and slow tanks,
+      // and needs no lock, so cloaked ships burn in it too.
+      const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * 0.35);
+      zones.push({ x: lead.x, y: lead.y, r: st.riftRadius, dps: st.dmg, ramp: st.riftRamp,
+                   life: st.riftDur, maxLife: st.riftDur, color: ty.color, tick: 0 });
+      Sound.shotMortar();
+      break;
+    }
+    case 'annihilator': {
+      // Charged lance: one enormous piercing line across the whole board.
+      // Long reload, so it's about timing rather than sustained output.
+      const dx = target.x - t.x, dy = target.y - t.y;
+      const len = Math.hypot(dx, dy) || 0.001;
+      const ux = dx / len, uy = dy / len;
+      const ex = t.x + ux * st.range, ey = t.y + uy * st.range;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const px_ = e.x - t.x, py_ = e.y - t.y;
+        const proj = px_ * ux + py_ * uy;
+        if (proj < 0 || proj > st.range) continue;
+        if (Math.abs(px_ * uy - py_ * ux) < 0.45 + e.def.radius) damageEnemy(e, st.dmg, ty.color);
+      }
+      fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: ex, y2: ey, life: 0.26, color: ty.color });
+      Sound.bigExplosion();
       break;
     }
     /* ---------- Directed Energy ---------- */
@@ -1568,7 +1685,7 @@ function shoveEnemy(e, delta) {
 }
 
 // Cloaked ships can't be targeted until slowed; frost towers see through.
-function revealed(e) { return !e.def.cloak || state.waveTime < e.slowUntil; }
+function revealed(e) { return !e.def.cloak || state.waveTime < e.slowUntil || e.nulled; }
 
 /* ======================================================================
    WAVE FLOW
@@ -2164,7 +2281,7 @@ function startGame(mapIdx) {
       grid[s.col + ',' + s.row] = t;
     }
   }
-  enemies = []; bolts = []; shells = []; fx = []; parts = []; floats = [];
+  enemies = []; bolts = []; shells = []; zones = []; fx = []; parts = []; floats = [];
   spawnQueue = [];
 
   buildShopCards(); // this act's arsenal — the roster swaps between acts
@@ -2345,9 +2462,12 @@ function update(dt) {
   const anchors = towers.filter((t) => TOWER_TYPES[t.type].suppressor);
   for (const e of enemies) {
     e.suppressed = false;
+    e.nulled = false; // only decloaking suppressors set this (Null Field, not Anchor)
     if (!anchors.length) continue;
     for (const a of anchors) {
-      if (Math.hypot(a.x - e.x, a.y - e.y) <= towerStats(a).range) { e.suppressed = true; break; }
+      if (Math.hypot(a.x - e.x, a.y - e.y) > towerStats(a).range) continue;
+      e.suppressed = true;
+      if (TOWER_TYPES[a.type].decloak) e.nulled = true;
     }
     if (e.suppressed && e.fireShield) {
       e.fireShield = false;
@@ -2421,7 +2541,8 @@ function update(dt) {
     // actively expose cloaks. Every arsenal needs at least one, or Phantom
     // levels are unplayable with that toolbox.
     const seesCloaked = tty.id === 'frost' || tty.id === 'mortar' || tty.id === 'tesla'
-      || tty.id === 'singularity' || tty.id === 'graviton' || tty.id === 'staticfield';
+      || tty.id === 'singularity' || tty.id === 'graviton' || tty.id === 'staticfield'
+      || tty.id === 'hive' || tty.id === 'rift'; // drones hunt; rifts don't aim
     let best = null, bestS = -1;
     // Beam Lance holds its current target while that ship is still valid,
     // instead of re-picking the furthest-along one every frame. Without this
@@ -2468,6 +2589,21 @@ function update(dt) {
       if (b.slowPct && !tg.dead) {
         tg.slowPct = Math.max(tg.slowPct * (state.waveTime < tg.slowUntil ? 1 : 0), b.slowPct);
         tg.slowUntil = state.waveTime + b.slowDur;
+      }
+      // Splinter Node: if this shard was the killing blow, it fragments into
+      // the nearest surviving ship. Chains through packed chaff, does nothing
+      // extra against a lone target.
+      if (b.frag && tg.dead) {
+        let next = null, bd = 2.2;
+        for (const e of enemies) {
+          if (e.dead || e === tg) continue;
+          const d = Math.hypot(e.x - tg.x, e.y - tg.y);
+          if (d < bd) { bd = d; next = e; }
+        }
+        if (next) {
+          damageEnemy(next, b.frag, b.color);
+          fx.push({ kind: 'chain', pts: [{ x: tg.x, y: tg.y }, { x: next.x, y: next.y }], life: 0.14, color: b.color });
+        }
       }
       // Spark Turret's charged shot: arc off the target into a nearby ship.
       if (b.arc) {
@@ -2524,6 +2660,24 @@ function update(dt) {
     }
   }
   shells = shells.filter((s) => !s.done);
+
+  // rift zones: persistent fields that damage anything inside, harder the
+  // longer they've been open. Damage lands in discrete ticks rather than
+  // per-frame, so Aegis armor (a flat cut per HIT) can't nullify it.
+  for (const z of zones) {
+    z.life -= dt;
+    z.tick -= dt;
+    if (z.tick <= 0) {
+      z.tick = 0.25;
+      const age = z.maxLife - z.life;
+      const dmg = (z.dps * (1 + z.ramp * age)) * 0.25;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - z.x, e.y - z.y) <= z.r + e.def.radius) damageEnemy(e, dmg, z.color);
+      }
+    }
+  }
+  zones = zones.filter((z) => z.life > 0);
 
   updateParticlesOnly(dt);
 
@@ -2842,6 +2996,102 @@ function drawTurretShape(g, ty, s, blur = 10) {
       ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color, g);
       circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff', g);
       break;
+    /* ---------- Void Xenotech ---------- */
+    case 'splinter': {
+      // a cluster of jagged shards radiating from a core
+      for (let i = 0; i < 5; i++) {
+        g.save();
+        g.rotate((i / 5) * Math.PI * 2);
+        g.translate(0, -s * 0.42);
+        poly(3, s * 0.15, ty.color, g);
+        g.restore();
+      }
+      circle(0, 0, s * 0.2, ty.color, g);
+      break;
+    }
+    case 'nullfield': {
+      // a web/lattice — the field that switches things off
+      g.strokeStyle = ty.color;
+      g.lineWidth = 1.6;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        g.beginPath();
+        g.moveTo(0, 0);
+        g.lineTo(Math.cos(a) * s * 0.55, Math.sin(a) * s * 0.55);
+        g.stroke();
+      }
+      for (const rr of [0.24, 0.42]) {
+        g.beginPath();
+        for (let i = 0; i <= 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const px_ = Math.cos(a) * s * rr, py_ = Math.sin(a) * s * rr;
+          if (i === 0) g.moveTo(px_, py_); else g.lineTo(px_, py_);
+        }
+        g.stroke();
+      }
+      circle(0, 0, s * 0.11, '#ffffff', g);
+      break;
+    }
+    case 'hive': {
+      // hexagonal hive with drones circling out of it
+      poly(6, s * 0.38, ty.color, g);
+      const spin = performance.now() / 600;
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i / 3) * Math.PI * 2;
+        circle(Math.cos(a) * s * 0.62, Math.sin(a) * s * 0.62, s * 0.09, ty.color, g);
+      }
+      circle(0, 0, s * 0.14, '#0d0a02', g);
+      break;
+    }
+    case 'obelisk': {
+      // a standing monolith with resonance rings pulsing off it
+      g.fillStyle = ty.color;
+      g.beginPath();
+      g.moveTo(-s * 0.18, s * 0.45);
+      g.lineTo(-s * 0.12, -s * 0.5);
+      g.lineTo(s * 0.12, -s * 0.5);
+      g.lineTo(s * 0.18, s * 0.45);
+      g.closePath();
+      g.fill();
+      const ph = (performance.now() / 1000) % 1.6 / 1.6;
+      g.strokeStyle = ty.color;
+      g.globalAlpha = Math.max(0, 1 - ph);
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, 0, s * (0.3 + ph * 0.5), 0, Math.PI * 2);
+      g.stroke();
+      g.globalAlpha = 1;
+      circle(0, -s * 0.3, s * 0.08, '#ffffff', g);
+      break;
+    }
+    case 'rift': {
+      // a torn slit in space, wider in the middle
+      g.fillStyle = ty.color;
+      g.beginPath();
+      g.moveTo(0, -s * 0.6);
+      g.quadraticCurveTo(s * 0.3, 0, 0, s * 0.6);
+      g.quadraticCurveTo(-s * 0.3, 0, 0, -s * 0.6);
+      g.fill();
+      g.fillStyle = '#150322';
+      g.beginPath();
+      g.moveTo(0, -s * 0.42);
+      g.quadraticCurveTo(s * 0.14, 0, 0, s * 0.42);
+      g.quadraticCurveTo(-s * 0.14, 0, 0, -s * 0.42);
+      g.fill();
+      break;
+    }
+    case 'annihilator': {
+      // heavy twin-pronged emitter with a charged core between the prongs
+      g.fillStyle = ty.color;
+      g.fillRect(-s * 0.1, -s * 0.34, s * 0.75, s * 0.16);
+      g.fillRect(-s * 0.1, s * 0.18, s * 0.75, s * 0.16);
+      circle(-s * 0.12, 0, s * 0.3, ty.color, g);
+      const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 180);
+      g.globalAlpha = pulse;
+      circle(s * 0.5, 0, s * 0.17, '#ffffff', g);
+      g.globalAlpha = 1;
+      break;
+    }
     /* ---------- Directed Energy ---------- */
     case 'spark': {
       // small emitter throwing a four-point spark
@@ -3073,6 +3323,7 @@ function drawTower(t) {
     frost: '159, 216, 255', beacon: '255, 170, 51',
     singularity: '162, 75, 255', anchor: '75, 255, 213',
     staticfield: '138, 255, 224', pylon: '255, 211, 110',
+    nullfield: '255, 111, 168',
   };
   if (AURA_RGB[ty.id]) {
     const rng = towerStats(t).range;
@@ -3420,6 +3671,30 @@ function render() {
     ctx.shadowColor = sh.color;
     ctx.shadowBlur = 12;
     circle(px(x), py(y), cell * 0.12, sh.color);
+    ctx.restore();
+  }
+
+  // rift zones — a churning tear that fades as it closes
+  for (const z of zones) {
+    const k = z.life / z.maxLife;
+    const t2 = performance.now() / 1000;
+    ctx.save();
+    ctx.globalAlpha = 0.18 + 0.22 * k;
+    const rg = ctx.createRadialGradient(px(z.x), py(z.y), 0, px(z.x), py(z.y), z.r * cell);
+    rg.addColorStop(0, z.color);
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(px(z.x), py(z.y), z.r * cell, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.5 * k;
+    ctx.strokeStyle = z.color;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.arc(px(z.x), py(z.y), z.r * cell * (0.45 + i * 0.3), t2 * (i ? -2 : 2), t2 * (i ? -2 : 2) + Math.PI * 1.2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
