@@ -294,6 +294,23 @@ canvas {
   color: var(--neon-cyan);
   box-shadow: 0 0 14px rgba(75, 245, 255, 0.3);
 }
+/* level-select arsenal override (testing aid) */
+.arsenal-pick {
+  margin: 2px 0 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255,255,255,0.12);
+}
+.arsenal-label {
+  font-size: 0.68rem;
+  letter-spacing: 1.2px;
+  font-weight: 700;
+  color: #8fa8cc;
+  margin-bottom: 6px;
+}
+.arsenal-label span { font-weight: 400; opacity: 0.7; }
+.arsenal-pick .tab-row { margin: 0; flex-wrap: wrap; }
+.arsenal-pick .tab-btn { padding: 5px 12px; font-size: 0.72rem; }
+
 .track-select { margin: 2px 0 10px; }
 .track-select .tab-btn { padding: 6px 14px; font-size: 0.74rem; }
 

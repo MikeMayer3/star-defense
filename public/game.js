@@ -729,7 +729,21 @@ const ARSENALS = [
 ];
 // Which arsenal a level uses. Only Gravitics is built out so far, so every
 // other act falls back to Ballistic rather than offering an empty shop.
-function arsenalFor(mapIdx) { return (mapIdx >= 20 && mapIdx <= 29) ? 2 : 0; }
+// A testing override on the level-select screen can force any built arsenal
+// onto any level; null = follow the act.
+const ARSENAL_OVERRIDE_KEY = 'stardefense_arsenalOverride';
+let arsenalOverride = (() => {
+  const v = localStorage.getItem(ARSENAL_OVERRIDE_KEY);
+  return v === null || v === '' ? null : Number(v);
+})();
+function arsenalFor(mapIdx) {
+  if (arsenalOverride != null) return arsenalOverride;
+  return (mapIdx >= 20 && mapIdx <= 29) ? 2 : 0;
+}
+// Sets that actually have towers built — the picker must not offer an empty shop.
+function builtArsenals() {
+  return ARSENALS.map((a, i) => i).filter((i) => TOWER_TYPES.some((t) => t.set === i && !t.hidden));
+}
 function activeArsenal() { return arsenalFor(state.mode === 'menu' ? state.mapSelect : state.mapIndex); }
 
 const TOWER_TYPES = [
@@ -1946,6 +1960,33 @@ function buildMapCards() {
     'Levels cleared: ' + mapsBeaten() + ' / ' + LEVEL_COUNT + '  •  High Score: ' + state.hiScore.toLocaleString();
   const sel = wrap.querySelector('.level-cell.selected');
   if (sel) sel.scrollIntoView({ block: 'nearest' });
+  buildArsenalPicker();
+}
+
+// Testing aid on the level-select screen: force a specific arsenal onto any
+// level, or Auto to use whatever that act would normally hand you. Only
+// arsenals that actually have towers are offered, so the shop can't come up
+// empty. The choice persists so a testing session survives a reload.
+function buildArsenalPicker() {
+  const wrap = $('arsenalSelect');
+  if (!wrap) return;
+  const opts = [{ label: 'Auto', val: null }]
+    .concat(builtArsenals().map((i) => ({ label: ARSENALS[i].name, val: i })));
+  wrap.innerHTML = '';
+  for (const o of opts) {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (arsenalOverride === o.val ? ' selected' : '');
+    btn.textContent = o.label + (o.val === null ? ' · ' + ARSENALS[arsenalFor(state.mapSelect)].name : '');
+    btn.addEventListener('click', () => {
+      arsenalOverride = o.val;
+      try {
+        if (o.val === null) localStorage.removeItem(ARSENAL_OVERRIDE_KEY);
+        else localStorage.setItem(ARSENAL_OVERRIDE_KEY, String(o.val));
+      } catch (e) { /* ignore */ }
+      buildArsenalPicker();
+    });
+    wrap.appendChild(btn);
+  }
 }
 
 function startGame(mapIdx) {
