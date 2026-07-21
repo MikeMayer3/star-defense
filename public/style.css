@@ -294,6 +294,17 @@ canvas {
   color: var(--neon-cyan);
   box-shadow: 0 0 14px rgba(75, 245, 255, 0.3);
 }
+.diff-pick { margin: 2px 0 6px; }
+.diff-pick .tab-row { margin: 0; flex-wrap: wrap; }
+.diff-pick .tab-btn { padding: 6px 14px; font-size: 0.76rem; }
+.diff-blurb {
+  font-size: 0.68rem;
+  color: #8fa8cc;
+  margin-top: 5px;
+  min-height: 1em;
+  letter-spacing: 0.3px;
+}
+
 /* level-select arsenal override (testing aid) */
 .arsenal-pick {
   margin: 2px 0 12px;

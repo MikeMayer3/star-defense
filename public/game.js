@@ -985,10 +985,35 @@ const TOTAL_WAVES = 30;
 // dual-lane layout still has less total time-under-fire than a serpentine
 // level, and it ends in the Super Dreadnought fight — layout + boss are its
 // difficulty. 1.8x is the sim-tuned value where a maxed board clears it.
+/* Difficulty tiers. These multiply the curve below rather than replacing it,
+   so every level keeps its shape and only the pressure changes. The numbers
+   are relative to the campaign's original tuning, which a fully-built board
+   was clearing at 20/20 shields — i.e. with no pressure at all once you knew
+   what you were doing. Normal is therefore deliberately well above 1.0: the
+   old baseline is roughly what Beginner now offers.
+   `hp` is the main lever; `lives` is the most legible one; economy moves only
+   gently because income is bimodal (starve the early game and a run
+   death-spirals rather than getting interestingly harder).
+   Veteran deliberately keeps 20 shields. It's not an oversight: the finale
+   can leak a Dreadnought (8) AND the Super Dreadnought (10) in the same
+   wave, so any tier below 19 shields is mathematically unwinnable there no
+   matter how well you play. Veteran takes its bite from HP instead. */
+const DIFFICULTIES = [
+  { id: 'beginner', name: 'Beginner', icon: '🌱', hp: 0.75, spd: 0.95, money: 1.25, lives: 25,
+    blurb: 'Room to learn — hard to lose a run' },
+  { id: 'normal', name: 'Normal', icon: '🎯', hp: 1.9, spd: 1.0, money: 1.0, lives: 20,
+    blurb: 'Build well or the late waves break through' },
+  { id: 'veteran', name: 'Veteran', icon: '☠️', hp: 2.5, spd: 1.05, money: 0.9, lives: 20,
+    blurb: 'Near-perfect play required — the finale is a knife edge' },
+];
+const DIFF_KEY = 'stardefense_difficulty';
+let difficultyId = localStorage.getItem(DIFF_KEY) || 'normal';
+function diff() { return DIFFICULTIES.find((d) => d.id === difficultyId) || DIFFICULTIES[1]; }
+
 function levelMult(i) { return i === LEVEL_COUNT - 1 ? 1.8 : 1 + 1.5 * i / (LEVEL_COUNT - 1); }
-function levelStartMoney(i) { return Math.round(200 * levelMult(i)) + 20; } // 220 → 520
-function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex); }
-function speedMult(w) { return 1 + 0.005 * w; }
+function levelStartMoney(i) { return Math.round(200 * levelMult(i) * diff().money) + 20; }
+function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex) * diff().hp; }
+function speedMult(w) { return (1 + 0.005 * w) * diff().spd; }
 // Kill rewards scale only with the wave within a level, NOT with the level
 // multiplier. Enemies get tankier and more numerous later (more total reward
 // per wave already), so an extra level-scaled income boost on top just buried
@@ -998,7 +1023,7 @@ function speedMult(w) { return 1 + 0.005 * w; }
 // real constraint (you can't quite max every tower). The cut is naturally
 // level-scaled — ~0% at level 1, ~35% by level 30 — so it never touches the
 // fragile early game.
-function rewardMult(w) { return 1 + 0.03 * w; }
+function rewardMult(w) { return (1 + 0.03 * w) * diff().money; }
 
 // Deterministic per-wave RNG — wave N is always the same wave N, so the
 // build-phase preview matches what actually spawns and retries are fair.
@@ -2217,7 +2242,27 @@ function buildMapCards() {
     'Levels cleared: ' + mapsBeaten() + ' / ' + LEVEL_COUNT + '  •  High Score: ' + state.hiScore.toLocaleString();
   const sel = wrap.querySelector('.level-cell.selected');
   if (sel) sel.scrollIntoView({ block: 'nearest' });
+  buildDifficultyPicker();
   buildArsenalPicker();
+}
+
+function buildDifficultyPicker() {
+  const wrap = $('diffSelect');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (const d of DIFFICULTIES) {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (d.id === difficultyId ? ' selected' : '');
+    btn.textContent = d.icon + ' ' + d.name;
+    btn.addEventListener('click', () => {
+      difficultyId = d.id;
+      try { localStorage.setItem(DIFF_KEY, d.id); } catch (e) { /* ignore */ }
+      buildDifficultyPicker();
+    });
+    wrap.appendChild(btn);
+  }
+  const blurb = $('diffBlurb');
+  if (blurb) blurb.textContent = diff().blurb + ' · ' + diff().lives + ' shields';
 }
 
 // Testing aid on the level-select screen: force a specific arsenal onto any
@@ -2254,7 +2299,7 @@ function startGame(mapIdx) {
   state.phase = 'build';
   state.level = cp ? cp.wave : 1;
   state.money = DEBUG ? 999999 : (cp ? cp.money : levelStartMoney(mapIdx));
-  state.lives = cp ? cp.lives : 20;
+  state.lives = cp ? cp.lives : diff().lives;
   state.score = 0;
   state.kills = 0;
   state.earned = 0;
