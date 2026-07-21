@@ -220,6 +220,45 @@ canvas {
 .menu-footer-row { display: flex; gap: 8px; }
 .menu-footer-row .ghost-btn { margin-top: 6px; }
 
+/* ============ HOME MENU ============ */
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 6px 0 22px;
+}
+.primary-btn.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #dceaff;
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.primary-btn.secondary:hover {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  box-shadow: 0 0 18px rgba(75, 245, 255, 0.25);
+}
+
+/* ============ SETTINGS / ABOUT ============ */
+.settings-audio-row { justify-content: center; margin-top: 6px; }
+.settings-label {
+  font-size: 0.72rem;
+  letter-spacing: 1.5px;
+  color: #7fa6d6;
+  font-weight: 700;
+  margin: 18px 0 4px;
+}
+.about-text {
+  font-size: 0.88rem;
+  color: #b9d0f0;
+  line-height: 1.6;
+  text-align: left;
+  margin: 8px 0 18px;
+}
+.about-text p { margin: 0 0 12px; }
+.about-text strong { color: var(--neon-cyan); }
+.about-credit { color: #8fa8cc; font-size: 0.78rem; }
+
 .howto {
   margin-top: 20px;
   font-size: 0.78rem;
@@ -346,6 +385,7 @@ canvas {
   font-family: inherit;
 }
 .wave-btn:hover { transform: translateX(-50%) translateY(-1px); box-shadow: 0 0 20px rgba(93, 255, 176, 0.65); }
+#waveBtn.hidden { display: none; }
 .wave-btn.running {
   opacity: 0.35;
   cursor: default;

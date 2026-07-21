@@ -961,6 +961,16 @@ const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), sh
   bannerEl = $('banner'), pauseEl = $('pauseOverlay'), overEl = $('gameOver'),
   towerCardsEl = $('towerCards'), upPanelEl = $('upgradePanel');
 
+// The main menu is split across a few overlay screens (home, level select,
+// settings, about) — only one shows at a time while state.mode === 'menu'.
+const MENU_SCREENS = ['menu', 'levelSelect', 'settings', 'about'];
+function showMenuScreen(id) {
+  for (const s of MENU_SCREENS) $(s).classList.toggle('hidden', s !== id);
+}
+function hideAllMenuScreens() {
+  for (const s of MENU_SCREENS) $(s).classList.add('hidden');
+}
+
 /* ======================================================================
    ENTITY HELPERS
    ====================================================================== */
@@ -1260,6 +1270,7 @@ function endGame(victory) {
   topbarEl.classList.add('hidden');
   leftRailEl.classList.add('hidden');
   shopEl.classList.add('hidden');
+  $('waveBtn').classList.add('hidden');
   overEl.classList.remove('hidden');
   updateWavePreview();
 }
@@ -1714,12 +1725,13 @@ function startGame(mapIdx) {
   enemies = []; bolts = []; shells = []; fx = []; parts = []; floats = [];
   spawnQueue = [];
 
-  menuEl.classList.add('hidden');
+  hideAllMenuScreens();
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
   topbarEl.classList.remove('hidden');
   leftRailEl.classList.remove('hidden');
   shopEl.classList.remove('hidden');
+  $('waveBtn').classList.remove('hidden');
   closeUpgradePanel();
   resize();
   Sound.startMusic();
@@ -1731,12 +1743,13 @@ function startGame(mapIdx) {
 function goToMenu() {
   state.mode = 'menu';
   Sound.stopMusic();
-  menuEl.classList.remove('hidden');
+  showMenuScreen('menu');
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
   topbarEl.classList.add('hidden');
   leftRailEl.classList.add('hidden');
   shopEl.classList.add('hidden');
+  $('waveBtn').classList.add('hidden');
   buildMapCards();
   updateWavePreview();
   resize();
@@ -1753,6 +1766,13 @@ function togglePause() {
     Sound.startMusic();
   }
 }
+
+// Home-menu navigation between the overlay screens.
+$('levelSelectBtn').addEventListener('click', () => { buildMapCards(); showMenuScreen('levelSelect'); });
+$('settingsBtn').addEventListener('click', () => showMenuScreen('settings'));
+$('aboutBtn').addEventListener('click', () => showMenuScreen('about'));
+document.querySelectorAll('[data-back]').forEach((btn) =>
+  btn.addEventListener('click', () => { buildMapCards(); showMenuScreen('menu'); }));
 
 $('startBtn').addEventListener('click', () => startGame(state.mapSelect));
 $('retryBtn').addEventListener('click', () => {

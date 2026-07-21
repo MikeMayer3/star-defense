@@ -15,11 +15,26 @@
 <canvas id="bg"></canvas>
 <canvas id="game"></canvas>
 
-<!-- ============ MENU SCREEN ============ -->
+<!-- ============ HOME MENU ============ -->
 <div id="menu" class="screen">
   <div class="menu-panel">
     <h1 class="title"><span class="t1">STAR</span><span class="t2">DEFENSE</span></h1>
     <p class="subtitle">Build turrets. Hold the line. Clear all 40 levels.</p>
+
+    <div class="home-actions">
+      <button id="levelSelectBtn" class="primary-btn">🎯 LEVEL SELECT</button>
+      <button id="settingsBtn" class="primary-btn secondary">⚙️ SETTINGS</button>
+      <button id="aboutBtn" class="primary-btn secondary">ℹ️ ABOUT</button>
+    </div>
+
+    <div class="best-stats" id="bestStats">Levels cleared: 0 / 40 &nbsp;•&nbsp; High Score: 0</div>
+  </div>
+</div>
+
+<!-- ============ LEVEL SELECT ============ -->
+<div id="levelSelect" class="screen hidden">
+  <div class="menu-panel">
+    <h1 class="title"><span class="t1">LEVEL</span><span class="t2">SELECT</span></h1>
 
     <div class="level-grid" id="mapSelect">
       <!-- level cells injected by game.js -->
@@ -27,29 +42,47 @@
     <div class="level-info" id="levelInfo"></div>
 
     <button id="startBtn" class="primary-btn">DEPLOY DEFENSES ▶</button>
+    <button class="ghost-btn" data-back>◀ Back</button>
+  </div>
+</div>
 
-    <div class="menu-footer">
-      <div class="best-stats" id="bestStats">Best Wave: 0 &nbsp;•&nbsp; High Score: 0</div>
-      <div class="menu-footer-row">
-        <button id="muteBtn" class="ghost-btn">🔊 Sound On</button>
-        <button id="musicBtn" class="ghost-btn">🎵 Music On</button>
-      </div>
-      <div class="tab-row track-select" id="trackSelect">
-        <button class="tab-btn" data-track="drift">Drift</button>
-        <button class="tab-btn" data-track="pulse">Pulse</button>
-        <button class="tab-btn" data-track="nova">Nova</button>
-      </div>
+<!-- ============ SETTINGS ============ -->
+<div id="settings" class="screen hidden">
+  <div class="menu-panel small">
+    <h1 class="title"><span class="t1">SET</span><span class="t2">TINGS</span></h1>
+
+    <div class="menu-footer-row settings-audio-row">
+      <button id="muteBtn" class="ghost-btn">🔊 Sound On</button>
+      <button id="musicBtn" class="ghost-btn">🎵 Music On</button>
     </div>
 
-    <div class="howto">
-      <strong>How to play:</strong> Alien ships fly the glowing lane toward your mothership.
-      Pick a turret from the bar below, tap an open tile to build it, then press
-      <strong>START WAVE</strong>. Kills earn Space Bucks — spend them on more turrets and upgrades.
-      Each level is 30 waves and your defense stays put the whole run; enemies grow relentlessly
-      stronger, so upgrade your turrets (tap one you've built) or the late waves will walk
-      through them. Survive wave 30 to clear the level and unlock the next.
-      Lose all 20 shields and the fleet breaks through.
+    <p class="settings-label">Music Track</p>
+    <div class="tab-row track-select" id="trackSelect">
+      <button class="tab-btn" data-track="drift">Drift</button>
+      <button class="tab-btn" data-track="pulse">Pulse</button>
+      <button class="tab-btn" data-track="nova">Nova</button>
     </div>
+
+    <button class="ghost-btn" data-back>◀ Back</button>
+  </div>
+</div>
+
+<!-- ============ ABOUT ============ -->
+<div id="about" class="screen hidden">
+  <div class="menu-panel">
+    <h1 class="title"><span class="t1">A</span><span class="t2">BOUT</span></h1>
+
+    <div class="about-text">
+      <p><strong>Star Defense</strong> is a neon tower-defense game. Alien fleets fly a
+      glowing lane toward your mothership across 40 levels of 30 waves each.</p>
+      <p>Pick a turret from the shop, drop it on an open tile, and press
+      <strong>START WAVE</strong>. Kills earn Space Bucks to buy and upgrade turrets —
+      and you'll need those upgrades, because the enemies never stop scaling.
+      Lose all 20 shields and the fleet breaks through.</p>
+      <p class="about-credit">Built with Claude Code.</p>
+    </div>
+
+    <button class="ghost-btn" data-back>◀ Back</button>
   </div>
 </div>
 
@@ -84,7 +117,7 @@
 <div id="intelCard" class="hidden"></div>
 
 <!-- ============ START WAVE (bottom middle, floats over the board) ============ -->
-<button id="waveBtn" class="wave-btn">▶ START WAVE</button>
+<button id="waveBtn" class="wave-btn hidden">▶ START WAVE</button>
 
 <!-- follows the finger/cursor while dragging a tower card onto the board -->
 <canvas id="dragGhost" class="hidden" width="72" height="72"></canvas>
