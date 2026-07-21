@@ -46,7 +46,10 @@ function resize() {
   const topH = 48;
   const leftW = (!leftRail.classList.contains('hidden') && leftRail.offsetWidth) || 108;
   const rightW = (!shop.classList.contains('hidden') && shop.offsetWidth) || 108;
-  cell = Math.min((W - leftW - rightW - 12) / COLS, (H - topH - 10) / ROWS);
+  // Clamped positive: a transient 0x0 viewport (Android orientation change,
+  // backgrounded tab) would otherwise make cell negative, and the first
+  // negative-radius gradient throws — killing the whole render loop.
+  cell = Math.max(1, Math.min((W - leftW - rightW - 12) / COLS, (H - topH - 10) / ROWS));
   boardX = leftW + (W - leftW - rightW - cell * COLS) / 2;
   boardY = topH + (H - topH - cell * ROWS) / 2;
 }
@@ -706,38 +709,95 @@ function pathPoint(map, s) {
 }
 
 /* ======================================================================
-   TOWER TYPES — 7 turrets, each with 3 levels (base + 2 upgrades).
+   TOWER TYPES — each with 3 levels (base + 2 upgrades).
    dmg = per shot · rate = shots/sec · range in cells.
+
+   Turrets are grouped into ARSENALS (`set`). The shop only offers the
+   arsenal for the level you're on, so each act of the campaign plays with
+   a different toolbox instead of the roster just growing (24 cards would
+   be unusable, and a fixed roster is why levels 22+ felt like pure number
+   scaling). Every arsenal must independently answer every enemy gimmick —
+   cloak, Warden shields, Aegis armor, Mender heals, swarms — or a whole
+   act becomes unplayable. `set` is a tag, NOT an array index: indices stay
+   stable so saved checkpoints (which store t.type) keep working.
    ====================================================================== */
+const ARSENALS = [
+  { name: 'Ballistic Command', blurb: 'Conventional kinetic tech' },
+  { name: 'Directed Energy', blurb: 'Beams, arcs and heat' },      // reserved
+  { name: 'Gravitics', blurb: 'Mass, momentum and position' },
+  { name: 'Void Xenotech', blurb: 'Reverse-engineered alien tech' }, // reserved
+];
+// Which arsenal a level uses. Only Gravitics is built out so far, so every
+// other act falls back to Ballistic rather than offering an empty shop.
+function arsenalFor(mapIdx) { return (mapIdx >= 20 && mapIdx <= 29) ? 2 : 0; }
+function activeArsenal() { return arsenalFor(state.mode === 'menu' ? state.mapSelect : state.mapIndex); }
+
 const TOWER_TYPES = [
+  /* ---------- Set 0 · Ballistic Command ---------- */
   {
-    id: 'blaster', name: 'Pulse Blaster', icon: '🔫', color: '#4bf5ff', glow: 'rgba(75,245,255,0.45)',
+    set: 0, id: 'blaster', name: 'Pulse Blaster', icon: '🔫', color: '#4bf5ff', glow: 'rgba(75,245,255,0.45)',
     desc: 'Cheap all-rounder — no weakness, no specialty', cost: 50, dmg: 18, rate: 1.6, range: 3.0, upCost: [40, 120],
   },
   {
-    id: 'frost', name: 'Frost Emitter', icon: '❄️', color: '#9fd8ff', glow: 'rgba(159,216,255,0.45)',
+    set: 0, id: 'frost', name: 'Frost Emitter', icon: '❄️', color: '#9fd8ff', glow: 'rgba(159,216,255,0.45)',
     desc: 'Slows every ship it hits', cost: 75, dmg: 5, rate: 1.1, range: 2.5, upCost: [60, 175],
   },
   {
-    id: 'gatling', name: 'Gatling Array', icon: '🌀', color: '#5dffb0', glow: 'rgba(93,255,176,0.45)',
+    set: 0, id: 'gatling', name: 'Gatling Array', icon: '🌀', color: '#5dffb0', glow: 'rgba(93,255,176,0.45)',
     desc: 'Rapid fire — shreds swarms, strips Warden shields', cost: 110, dmg: 10, rate: 5.5, range: 2.6, upCost: [85, 250],
   },
   {
-    id: 'mortar', name: 'Plasma Mortar', icon: '💥', color: '#ff4ecb', glow: 'rgba(255,78,203,0.45)',
+    set: 0, id: 'mortar', name: 'Plasma Mortar', icon: '💥', color: '#ff4ecb', glow: 'rgba(255,78,203,0.45)',
     desc: 'Splash — wipes whole clusters, weak on lone tanks', cost: 160, dmg: 50, rate: 0.55, range: 3.7, upCost: [130, 375],
   },
   {
-    id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
+    set: 0, id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
     desc: 'Lightning arcs through a whole pack at once', cost: 220, dmg: 30, rate: 1.15, range: 2.8, upCost: [175, 510],
   },
   {
-    id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
+    set: 0, id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
     desc: 'Long-range pierce — busts tanks & armor, overkills chaff', cost: 320, dmg: 85, rate: 0.45, range: 4.3, upCost: [255, 735],
   },
   {
-    id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
+    set: 0, id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
     desc: 'Boosts damage & fire rate nearby', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 315],
     buffDmg: 0.15, buffRate: 0.15,
+  },
+
+  /* ---------- Set 2 · Gravitics (levels 21-30) ----------
+     Same six roles as Ballistic, but the act's identity is controlling
+     WHERE ships are, not just how fast they die: shoving them back,
+     dragging them into clumps, and pinning them in place. Enemies travel
+     along a 1-D distance value on their lane, so pushing and pulling is
+     just arithmetic on that — no pathing rework. */
+  {
+    set: 2, id: 'massdriver', name: 'Mass Driver', icon: '🔩', color: '#c8d4ff', glow: 'rgba(200,212,255,0.45)',
+    desc: 'Heavy slugs that shove ships back down the lane', cost: 50, dmg: 20, rate: 1.5, range: 2.9, upCost: [40, 120],
+  },
+  {
+    set: 2, id: 'singularity', name: 'Singularity Well', icon: '🌀', color: '#a24bff', glow: 'rgba(162,75,255,0.45)',
+    desc: 'Drags ships into a clump, slows them, exposes cloaks', cost: 90, dmg: 6, rate: 1.0, range: 2.6, upCost: [70, 200],
+  },
+  {
+    set: 2, id: 'flak', name: 'Flak Cluster', icon: '💠', color: '#ff9f45', glow: 'rgba(255,159,69,0.45)',
+    desc: 'Shrapnel cone — shreds packs, strips Warden shields', cost: 110, dmg: 9, rate: 4.5, range: 2.5, upCost: [85, 250],
+  },
+  {
+    set: 2, id: 'anchor', name: 'Inertia Anchor', icon: '⚓', color: '#4bffd5', glow: 'rgba(75,255,213,0.45)',
+    desc: 'Suppression field — blocks healing, strips armor & fire shields', cost: 140, dmg: 0, rate: 0, range: 3.8, upCost: [110, 315],
+    suppressor: true,
+  },
+  {
+    set: 2, id: 'graviton', name: 'Graviton Mortar', icon: '🕳️', color: '#ff5fa8', glow: 'rgba(255,95,168,0.45)',
+    desc: 'Collapsing well — splash damage that pins what it catches', cost: 185, dmg: 46, rate: 0.5, range: 3.6, upCost: [150, 400],
+  },
+  {
+    set: 2, id: 'meteor', name: 'Meteor Rail', icon: '☄️', color: '#ffd24b', glow: 'rgba(255,210,75,0.45)',
+    // 240 is sim-tuned: below ~240 a fully-built Gravitics board can't stop
+    // the wave-30 Dreadnought and leaks it (the wells used to hold bosses
+    // indefinitely, which masked this until SHOVE_BUDGET closed that exploit).
+    // At 240 the arsenal matches Ballistic's benchmark — clears with 20 shields.
+    desc: 'Calls down a slug — huge single hit, punches armor', cost: 340, dmg: 240, rate: 0.3, range: 4.0, upCost: [270, 760],
   },
 ];
 
@@ -752,10 +812,16 @@ function towerStats(t) {
     // type specials scale with level too
     slowPct: 0.42 + 0.08 * l,     // frost
     slowDur: 1.6 + 0.35 * l,      // frost
-    splash: 1.55 + 0.2 * l,       // mortar
+    splash: 1.55 + 0.2 * l,       // mortar / graviton
     chains: 3 + l,                // tesla (extra jumps beyond first target)
     buffDmg: ty.buffDmg ? ty.buffDmg + 0.05 * l : 0,   // beacon
     buffRate: ty.buffRate ? ty.buffRate + 0.05 * l : 0, // beacon
+    // --- Gravitics ---
+    push: 0.18 + 0.05 * l,        // mass driver: cells shoved back per hit
+    pull: 0.30 + 0.08 * l,        // singularity: cells dragged toward the well per pulse
+    pinDur: 0.5 + 0.15 * l,       // graviton: seconds held in place
+    coneDeg: 34 + 4 * l,          // flak: half-angle of the shrapnel cone
+    splashSm: 0.6 + 0.1 * l,      // meteor: tight impact splash
     upCost: t.level < 3 ? ty.upCost[t.level - 1] : null,
   };
 }
@@ -1086,8 +1152,10 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
   }
   // Aegis armor: flat reduction per hit. Fully-blocked hits show a
   // throttled DEFLECTED float so the player can see why it isn't dying.
-  if (e.armor) {
-    dmg = Math.max(0, dmg - e.armor);
+  // An Inertia Anchor's suppression field strips the plating entirely.
+  const armor = e.suppressed ? 0 : e.armor;
+  if (armor) {
+    dmg = Math.max(0, dmg - armor);
     if (dmg === 0) {
       if (state.waveTime - (e.lastDeflect || -9) > 0.6) {
         e.lastDeflect = state.waveTime;
@@ -1135,8 +1203,17 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     // Super Dreadnought's death spawns two full-strength Dreadnoughts —
     // beating it is only the first half of the fight.
     if (e.type === 'superboss') {
-      spawnEnemy('boss', e.path, e.s);
-      spawnEnemy('boss', e.path, Math.max(0, e.s - 0.35));
+      // The two Dreadnoughts that break off are CRIPPLED, not pristine. At
+      // full strength the finale's combined boss HP (superboss + 2 bosses)
+      // outruns the DPS ceiling of any board — sim-verified: every build,
+      // including all-Rail and rail+beacon+frost, reached wave 30 and then
+      // leaked, so the campaign literally could not be finished.
+      for (const s of [e.s, Math.max(0, e.s - 0.35)]) {
+        spawnEnemy('boss', e.path, s);
+        const half = enemies[enemies.length - 1];
+        half.hp *= SUPERBOSS_SPLIT_HP;
+        half.maxHp *= SUPERBOSS_SPLIT_HP;
+      }
     }
   }
 }
@@ -1215,6 +1292,78 @@ function fireTower(t, st, target) {
       Sound.shotTesla();
       break;
     }
+    /* ---------- Gravitics ---------- */
+    case 'massdriver':
+      // like a blaster bolt, but the slug carries momentum: on impact it
+      // shoves the ship back down its lane (see bolt handling for b.push)
+      bolts.push({ x: t.x, y: t.y, target, speed: 10, dmg: st.dmg, color: ty.color, r: 0.1, push: st.push });
+      Sound.shotBlaster();
+      break;
+    case 'singularity': {
+      // Aura pulse, like frost: everything in range (cloaked included) is
+      // dragged toward the well's own point on its lane, slowed and drained.
+      // Clumping is the real payload — it sets up every splash tower.
+      const map = currentMap();
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - t.x, e.y - t.y) > st.range) continue;
+        damageEnemy(e, st.dmg, ty.color);
+        if (e.dead) continue;
+        // find the distance-along-lane closest to this tower, then drag the
+        // ship toward it (never past it, so it can't be yanked backwards
+        // through the whole level or shoved forward into the base)
+        const P = enemyPath(map, e.path);
+        let bestS = e.s, bestD = 1e9;
+        for (let s = Math.max(0, e.s - 2.2); s <= Math.min(P.totalLen, e.s + 2.2); s += 0.2) {
+          const p = pathPoint(P, s);
+          const d = Math.hypot(p.x - t.x, p.y - t.y);
+          if (d < bestD) { bestD = d; bestS = s; }
+        }
+        shoveEnemy(e, Math.max(-st.pull, Math.min(st.pull, bestS - e.s)));
+        e.slowPct = Math.max(e.slowPct * (state.waveTime < e.slowUntil ? 1 : 0), st.slowPct);
+        e.slowUntil = state.waveTime + st.slowDur;
+      }
+      fx.push({ kind: 'ring', x: t.x, y: t.y, life: 0.3, maxLife: 0.3, r: st.range, color: ty.color });
+      Sound.shotFrost();
+      break;
+    }
+    case 'flak': {
+      // Shrapnel cone: every ship inside a wedge aimed at the target takes a
+      // hit. Many small hits = strips Warden shield charges fast and shreds
+      // packs, but each one is weak against Aegis's flat armor.
+      const aim = Math.atan2(target.y - t.y, target.x - t.x);
+      const half = st.coneDeg * Math.PI / 180;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = Math.hypot(e.x - t.x, e.y - t.y);
+        if (d > st.range) continue;
+        let da = Math.atan2(e.y - t.y, e.x - t.x) - aim;
+        while (da > Math.PI) da -= Math.PI * 2;
+        while (da < -Math.PI) da += Math.PI * 2;
+        if (Math.abs(da) <= half) damageEnemy(e, st.dmg, ty.color);
+      }
+      fx.push({ kind: 'cone', x: t.x, y: t.y, a: aim, half, r: st.range, life: 0.12, maxLife: 0.12, color: ty.color });
+      Sound.shotGatling();
+      break;
+    }
+    case 'graviton': {
+      // Lobbed collapsing well — splash damage that also pins survivors in
+      // place for a moment (pinned ships stop dead; see effSlow).
+      const flight = 0.5;
+      const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * flight);
+      shells.push({ sx: t.x, sy: t.y, tx: lead.x, ty: lead.y, t: 0, dur: flight, dmg: st.dmg, splash: st.splash, color: ty.color, pin: st.pinDur });
+      Sound.shotMortar();
+      break;
+    }
+    case 'meteor': {
+      // Slow, heavy, near-pinpoint strike: one enormous hit punches straight
+      // through Aegis armor, but it badly overkills chaff.
+      const flight = 0.65;
+      const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * flight);
+      shells.push({ sx: t.x, sy: t.y, tx: lead.x, ty: lead.y, t: 0, dur: flight, dmg: st.dmg, splash: st.splashSm, color: ty.color, meteor: true });
+      Sound.shotMortar();
+      break;
+    }
     case 'rail': {
       // Instant piercing beam through the target out to max range.
       const dx = target.x - t.x, dy = target.y - t.y;
@@ -1236,7 +1385,42 @@ function fireTower(t, st, target) {
   }
 }
 
-function effSlow(e) { return state.waveTime < e.slowUntil ? 1 - e.slowPct : 1; }
+// Movement multiplier: 0 while pinned by a Graviton well, otherwise reduced
+// by any active chill/gravity slow.
+function effSlow(e) {
+  if (e.pinnedUntil && state.waveTime < e.pinnedUntil) return 0;
+  return state.waveTime < e.slowUntil ? 1 - e.slowPct : 1;
+}
+
+// All Gravitics repositioning goes through here. A ship can never be shoved
+// more than REWIND_CAP cells back from the furthest point it has reached, so
+// a wall of Mass Drivers or stacked Singularity Wells can't drag the whole
+// wave back to the spawn and hold it there — that reads as a soft-lock (the
+// wave never ends, so you can never start the next one).
+// REWIND_CAP bounds how far back a single shove can put a ship. SHOVE_BUDGET
+// is the harder guarantee: each ship can only ever be pushed backwards a
+// fixed TOTAL distance over its whole life. Without it a wall of wells can
+// hold a wave inside the cap band forever — the ship never leaks and never
+// dies, so the wave never ends and the run is soft-locked (solo-Singularity
+// did exactly that in testing). Once the budget is spent, gravity towers can
+// still slow and damage a ship, but never shove it again, so every ship is
+// guaranteed to eventually reach the base or die.
+// Fraction of a full Dreadnought's HP that each half of a split Super
+// Dreadnought spawns with (see the split in damageEnemy).
+const SUPERBOSS_SPLIT_HP = 0.3;
+
+const REWIND_CAP = 2.5;
+const SHOVE_BUDGET = 4;
+function shoveEnemy(e, delta) {
+  if (delta < 0) {
+    const remaining = SHOVE_BUDGET - (e.shoved || 0);
+    if (remaining <= 0) return;
+    delta = -Math.min(-delta, remaining);
+    e.shoved = (e.shoved || 0) - delta; // delta is negative — accumulates magnitude
+  }
+  const floorS = Math.max(0, (e.maxS || 0) - REWIND_CAP);
+  e.s = Math.max(floorS, e.s + delta);
+}
 
 // Cloaked ships can't be targeted until slowed; frost towers see through.
 function revealed(e) { return !e.def.cloak || state.waveTime < e.slowUntil; }
@@ -1451,8 +1635,10 @@ function hideDragGhost() { dragGhostEl.classList.add('hidden'); }
 
 function buildShopCards() {
   towerCardsEl.innerHTML = '';
+  const set = activeArsenal();
   TOWER_TYPES.forEach((ty, i) => {
-    if (ty.hidden) return; // e.g. Tesla, temporarily — see its TOWER_TYPES entry
+    if (ty.hidden) return;
+    if (ty.set !== set) return; // only this act's arsenal is for sale
     const card = document.createElement('div');
     card.className = 'tower-card';
     card.style.setProperty('--tc', ty.color);
@@ -1558,6 +1744,8 @@ function openUpgradePanel(t) {
   $('upName').textContent = ty.icon + ' ' + ty.name + ' — LVL ' + t.level;
   $('upStats').textContent = ty.id === 'beacon'
     ? 'DMG +' + Math.round(st.buffDmg * 100) + '% · RATE +' + Math.round(st.buffRate * 100) + '% · RNG ' + st.range.toFixed(1)
+    : ty.suppressor
+    ? 'NO HEAL · NO ARMOR · DOUSES FIRE · RNG ' + st.range.toFixed(1)
     : 'DMG ' + Math.round(st.dmg) + ' · RATE ' + st.rate.toFixed(1) + '/s · RNG ' + st.range.toFixed(1);
   const upBtn = $('upgradeBtn');
   if (st.upCost != null) {
@@ -1683,10 +1871,16 @@ window.addEventListener('keydown', (ev) => {
   }
   if (state.mode !== 'playing') return;
   if (ev.key === ' ') { ev.preventDefault(); startWave(); }
+  // number keys pick the Nth card actually on offer, not the Nth entry in
+  // TOWER_TYPES — the shop only shows the current act's arsenal
   const n = parseInt(ev.key, 10);
-  if (n >= 1 && n <= TOWER_TYPES.length && !TOWER_TYPES[n - 1].hidden) {
-    closeUpgradePanel();
-    if (state.money >= TOWER_TYPES[n - 1].cost) setPlacing(n - 1); else Sound.invalid();
+  if (n >= 1) {
+    const offered = TOWER_TYPES.map((ty, i) => ({ ty, i })).filter(({ ty }) => !ty.hidden && ty.set === activeArsenal());
+    const pick = offered[n - 1];
+    if (pick) {
+      closeUpgradePanel();
+      if (state.money >= pick.ty.cost) setPlacing(pick.i); else Sound.invalid();
+    }
   }
   if (DEBUG) {
     if (ev.key === 'm') { state.money += 5000; updateHUD(); }
@@ -1792,6 +1986,7 @@ function startGame(mapIdx) {
   enemies = []; bolts = []; shells = []; fx = []; parts = []; floats = [];
   spawnQueue = [];
 
+  buildShopCards(); // this act's arsenal — the roster swaps between acts
   hideAllMenuScreens();
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
@@ -1949,6 +2144,7 @@ function update(dt) {
     const ePath = enemyPath(map, e.path);
     e.s += e.speed * effSlow(e) * dt;
     if (e.s >= ePath.totalLen) { leak(e); continue; }
+    if (e.s > (e.maxS || 0)) e.maxS = e.s; // high-water mark for shoveEnemy's clamp
     const p = pathPoint(ePath, e.s);
     e.wob += dt * 6;
     e.x = p.x; e.y = p.y; e.angle = p.angle;
@@ -1960,12 +2156,30 @@ function update(dt) {
   }
   enemies = enemies.filter((e) => !e.dead);
 
+  // Inertia Anchor suppression field: recomputed every frame so it tracks
+  // ships moving in and out. Inside it, defensive gimmicks stop working —
+  // armor is stripped (see damageEnemy), Menders can't heal, and Brute fire
+  // shields are doused for good. This is Gravitics' answer to the enemy
+  // counters that Frost handles in the Ballistic arsenal.
+  const anchors = towers.filter((t) => TOWER_TYPES[t.type].suppressor);
+  for (const e of enemies) {
+    e.suppressed = false;
+    if (!anchors.length) continue;
+    for (const a of anchors) {
+      if (Math.hypot(a.x - e.x, a.y - e.y) <= towerStats(a).range) { e.suppressed = true; break; }
+    }
+    if (e.suppressed && e.fireShield) {
+      e.fireShield = false;
+      addFloat(e.x, e.y, 'DOUSED', '#4bffd5');
+    }
+  }
+
   // menders repair nearby hulls (not themselves, not each other)
   for (const m of enemies) {
-    if (!m.def.heal) continue;
+    if (!m.def.heal || m.suppressed) continue; // suppressed menders can't heal
     const rate = m.def.heal * hpMult(state.level);
     for (const e of enemies) {
-      if (e === m || e.def.heal || e.hp >= e.maxHp) continue;
+      if (e === m || e.def.heal || e.hp >= e.maxHp || e.suppressed) continue;
       if (Math.hypot(e.x - m.x, e.y - m.y) <= m.def.healRange) e.hp = Math.min(e.maxHp, e.hp + rate * dt);
     }
     m.healPulse -= dt;
@@ -1979,7 +2193,8 @@ function update(dt) {
   const beacons = towers.filter((t) => TOWER_TYPES[t.type].id === 'beacon');
   for (const t of towers) {
     const tty = TOWER_TYPES[t.type];
-    if (tty.id === 'beacon') continue; // pure support — never targets or fires
+    // pure support — never targets or fires (Beacon buffs, Anchor suppresses)
+    if (tty.id === 'beacon' || tty.suppressor) continue;
     t.cool -= dt;
     const st = towerStats(t);
     // Command Beacon aura: deliberately does NOT stack — only the single
@@ -2002,7 +2217,11 @@ function update(dt) {
     // chill reveals it, and Mortar splash / Tesla arcs hit it without needing
     // to lock on. So a Blaster/Gatling/Rail-only board still leaks phantoms
     // (buy a counter), but there are several answers, not just Frost.
-    const seesCloaked = tty.id === 'frost' || tty.id === 'mortar' || tty.id === 'tesla';
+    // Towers that don't need a targeting lock (area/field weapons) or that
+    // actively expose cloaks. Every arsenal needs at least one, or Phantom
+    // levels are unplayable with that toolbox.
+    const seesCloaked = tty.id === 'frost' || tty.id === 'mortar' || tty.id === 'tesla'
+      || tty.id === 'singularity' || tty.id === 'graviton';
     let best = null, bestS = -1;
     for (const e of enemies) {
       if (e.dead) continue;
@@ -2031,6 +2250,12 @@ function update(dt) {
         tg.slowPct = Math.max(tg.slowPct * (state.waveTime < tg.slowUntil ? 1 : 0), b.slowPct);
         tg.slowUntil = state.waveTime + b.slowDur;
       }
+      // Mass Driver knockback: shove the ship back along its own lane.
+      // Never past the spawn, and bosses are too massive to budge (otherwise
+      // a wall of drivers could stunlock the whole fight at the entrance).
+      if (b.push && !tg.dead && tg.type !== 'boss' && tg.type !== 'superboss') {
+        shoveEnemy(tg, -b.push);
+      }
       b.hit = true;
     } else {
       b.x += (dx / d) * step;
@@ -2049,7 +2274,14 @@ function update(dt) {
       for (const e of enemies) {
         if (e.dead) continue;
         const d = Math.hypot(e.x - sh.tx, e.y - sh.ty);
-        if (d <= sh.splash + e.def.radius) damageEnemy(e, sh.dmg, sh.color);
+        if (d <= sh.splash + e.def.radius) {
+          damageEnemy(e, sh.dmg, sh.color);
+          // Graviton well: survivors are held in place for a beat. Bosses
+          // resist being frozen outright so they can't be perma-locked.
+          if (sh.pin && !e.dead && e.type !== 'boss' && e.type !== 'superboss') {
+            e.pinnedUntil = Math.max(e.pinnedUntil || 0, state.waveTime + sh.pin);
+          }
+        }
       }
     }
   }
@@ -2372,6 +2604,82 @@ function drawTurretShape(g, ty, s, blur = 10) {
       ringDonut(-s * 0.05, -s * 0.34, s * 0.16, s * 0.09, ty.color, g);
       circle(-s * 0.05, -s * 0.34, s * 0.045, '#ffffff', g);
       break;
+    /* ---------- Gravitics ---------- */
+    case 'massdriver':
+      // squat rail block with a heavy slug seated in the muzzle
+      roundRect(-s * 0.34, -s * 0.3, s * 0.46, s * 0.6, s * 0.08, g);
+      g.fill();
+      g.fillRect(s * 0.05, -s * 0.13, s * 0.6, s * 0.26);
+      circle(s * 0.62, 0, s * 0.15, '#ffffff', g);
+      break;
+    case 'singularity': {
+      // an event horizon: dark core ringed by an in-spiralling accretion arc
+      const spin = performance.now() / 700;
+      g.strokeStyle = ty.color;
+      g.lineWidth = s * 0.1;
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        g.arc(0, 0, s * (0.26 + i * 0.14), spin + i * 1.7, spin + i * 1.7 + Math.PI * 1.1);
+        g.stroke();
+      }
+      circle(0, 0, s * 0.2, '#12031f', g);
+      break;
+    }
+    case 'flak': {
+      // burst pattern: stubby wide barrel throwing a fan of fragments
+      g.fillRect(-s * 0.1, -s * 0.16, s * 0.5, s * 0.32);
+      for (let i = -1; i <= 1; i++) {
+        g.save();
+        g.rotate(i * 0.5);
+        g.translate(s * 0.62, 0);
+        poly(3, s * 0.12, ty.color, g);
+        g.restore();
+      }
+      circle(-s * 0.2, 0, s * 0.22, ty.color, g);
+      break;
+    }
+    case 'anchor': {
+      // anchor/weight silhouette with a containment ring — reads as "heavy"
+      const spin = performance.now() / 1100;
+      g.strokeStyle = ty.color;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, 0, s * 0.5, spin, spin + Math.PI * 1.5);
+      g.stroke();
+      g.fillStyle = ty.color;
+      g.fillRect(-s * 0.07, -s * 0.42, s * 0.14, s * 0.72);
+      g.fillRect(-s * 0.3, -s * 0.24, s * 0.6, s * 0.13);
+      g.save();
+      g.translate(0, s * 0.4);
+      poly(3, s * 0.17, ty.color, g);
+      g.restore();
+      break;
+    }
+    case 'graviton': {
+      // collapsing well: concentric rings pulling into a black centre
+      for (let i = 3; i >= 1; i--) {
+        g.strokeStyle = ty.color;
+        g.globalAlpha = 0.35 + i * 0.2;
+        g.lineWidth = s * 0.07;
+        g.beginPath();
+        g.arc(0, 0, s * i * 0.16, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      circle(0, 0, s * 0.14, '#1a0413', g);
+      break;
+    }
+    case 'meteor': {
+      // angled launch rail with a blazing slug at the tip
+      g.fillStyle = ty.color;
+      g.save();
+      g.rotate(-0.5);
+      g.fillRect(-s * 0.5, -s * 0.1, s * 0.9, s * 0.2);
+      g.restore();
+      circle(s * 0.42, -s * 0.3, s * 0.22, ty.color, g);
+      circle(s * 0.42, -s * 0.3, s * 0.1, '#ffffff', g);
+      break;
+    }
     case 'beacon': {
       // command beacon: a core with three relay nodes slowly orbiting it,
       // always broadcasting — never aims, so this spins independently of
@@ -2448,9 +2756,13 @@ function drawTower(t) {
   // reads as "you're interacting with this" instead of "this is always on."
   // A soft fill + faint solid rim + a slow outward ripple reads as an
   // ambient field instead.
-  if (ty.id === 'frost' || ty.id === 'beacon') {
+  const AURA_RGB = {
+    frost: '159, 216, 255', beacon: '255, 170, 51',
+    singularity: '162, 75, 255', anchor: '75, 255, 213',
+  };
+  if (AURA_RGB[ty.id]) {
     const rng = towerStats(t).range;
-    const auraColor = ty.id === 'frost' ? '159, 216, 255' : '255, 170, 51';
+    const auraColor = AURA_RGB[ty.id];
     const seed = t.col * 0.37 + t.row * 0.61;
     ctx.beginPath();
     ctx.arc(x, y, rng * cell, 0, Math.PI * 2);
@@ -2827,6 +3139,15 @@ function render() {
       ctx.beginPath();
       ctx.arc(px(e.x), py(e.y), e.r * cell * k, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (e.kind === 'cone') {
+      // flak burst: a filled wedge fading out from the muzzle
+      ctx.beginPath();
+      ctx.moveTo(px(e.x), py(e.y));
+      ctx.arc(px(e.x), py(e.y), e.r * cell, e.a - e.half, e.a + e.half);
+      ctx.closePath();
+      ctx.fillStyle = e.color;
+      ctx.globalAlpha *= 0.22;
+      ctx.fill();
     }
     ctx.restore();
   }
