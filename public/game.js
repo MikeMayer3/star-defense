@@ -712,31 +712,31 @@ function pathPoint(map, s) {
 const TOWER_TYPES = [
   {
     id: 'blaster', name: 'Pulse Blaster', icon: '🔫', color: '#4bf5ff', glow: 'rgba(75,245,255,0.45)',
-    desc: 'Cheap all-rounder — no weakness, no specialty', cost: 50, dmg: 18, rate: 1.6, range: 3.0, upCost: [40, 80],
+    desc: 'Cheap all-rounder — no weakness, no specialty', cost: 50, dmg: 18, rate: 1.6, range: 3.0, upCost: [40, 120],
   },
   {
     id: 'frost', name: 'Frost Emitter', icon: '❄️', color: '#9fd8ff', glow: 'rgba(159,216,255,0.45)',
-    desc: 'Slows every ship it hits', cost: 75, dmg: 5, rate: 1.1, range: 2.5, upCost: [60, 115],
+    desc: 'Slows every ship it hits', cost: 75, dmg: 5, rate: 1.1, range: 2.5, upCost: [60, 175],
   },
   {
     id: 'gatling', name: 'Gatling Array', icon: '🌀', color: '#5dffb0', glow: 'rgba(93,255,176,0.45)',
-    desc: 'Rapid fire — shreds swarms, strips Warden shields', cost: 110, dmg: 10, rate: 5.5, range: 2.6, upCost: [85, 165],
+    desc: 'Rapid fire — shreds swarms, strips Warden shields', cost: 110, dmg: 10, rate: 5.5, range: 2.6, upCost: [85, 250],
   },
   {
     id: 'mortar', name: 'Plasma Mortar', icon: '💥', color: '#ff4ecb', glow: 'rgba(255,78,203,0.45)',
-    desc: 'Splash — wipes whole clusters, weak on lone tanks', cost: 160, dmg: 50, rate: 0.55, range: 3.7, upCost: [130, 250],
+    desc: 'Splash — wipes whole clusters, weak on lone tanks', cost: 160, dmg: 50, rate: 0.55, range: 3.7, upCost: [130, 375],
   },
   {
     id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
-    desc: 'Lightning arcs through a whole pack at once', cost: 220, dmg: 30, rate: 1.15, range: 2.8, upCost: [175, 340],
+    desc: 'Lightning arcs through a whole pack at once', cost: 220, dmg: 30, rate: 1.15, range: 2.8, upCost: [175, 510],
   },
   {
     id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
-    desc: 'Long-range pierce — busts tanks & armor, overkills chaff', cost: 320, dmg: 85, rate: 0.45, range: 4.3, upCost: [255, 490],
+    desc: 'Long-range pierce — busts tanks & armor, overkills chaff', cost: 320, dmg: 85, rate: 0.45, range: 4.3, upCost: [255, 735],
   },
   {
     id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
-    desc: 'Boosts damage & fire rate nearby', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 210],
+    desc: 'Boosts damage & fire rate nearby', cost: 140, dmg: 0, rate: 0, range: 4, upCost: [110, 315],
     buffDmg: 0.15, buffRate: 0.15,
   },
 ];
@@ -826,11 +826,16 @@ function levelMult(i) { return i === LEVEL_COUNT - 1 ? 1.8 : 1 + 1.5 * i / (LEVE
 function levelStartMoney(i) { return Math.round(200 * levelMult(i)) + 20; } // 220 → 520
 function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex); }
 function speedMult(w) { return 1 + 0.005 * w; }
-// Kill rewards also scale partially with the level multiplier (exponent
-// < 1), so mid-campaign economy keeps pace while later levels still bite:
-// at levelMult 2.5x, income is ~1.7x, a net ~1.5x difficulty climb on top
-// of the fixed board ceiling.
-function rewardMult(w) { return (1 + 0.03 * w) * Math.pow(levelMult(state.mapIndex), 0.6); }
+// Kill rewards scale only with the wave within a level, NOT with the level
+// multiplier. Enemies get tankier and more numerous later (more total reward
+// per wave already), so an extra level-scaled income boost on top just buried
+// the late game in cash you couldn't spend — the board's build+upgrade cost is
+// a fixed ceiling, so surplus ballooned to $20k+. Keeping per-kill reward flat
+// across levels ties income to the fixed spending ceiling, so credits stay a
+// real constraint (you can't quite max every tower). The cut is naturally
+// level-scaled — ~0% at level 1, ~35% by level 30 — so it never touches the
+// fragile early game.
+function rewardMult(w) { return 1 + 0.03 * w; }
 
 // Deterministic per-wave RNG — wave N is always the same wave N, so the
 // build-phase preview matches what actually spawns and retries are fair.
