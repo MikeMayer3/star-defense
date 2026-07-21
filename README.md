@@ -6,18 +6,19 @@ A free neon tower-defense browser game. No build step, no dependencies, no accou
 
 Waves are deterministic (wave N of a map is always the same) and composed of squadron blocks, and the build phase shows a preview of exactly what's coming — tap an enemy chip for its stats. Each map debuts a new enemy that counters a lazy build: Wardens (map 1) carry shields that block the first hits outright (rapid fire strips them), Aegis cruisers (map 2) deflect flat damage per hit (heavy shots punch through), Phantoms (map 3) are cloaked until slowed (Frost sees through), and Menders (map 4) heal nearby ships (pierce and chain reach them mid-pack). Map 5 fields everything at once.
 
-## The six turrets
+## The seven turrets
 
 | Turret | Cost | Specialty |
 |---|---|---|
-| 🔫 Pulse Blaster | $50 | Cheap, reliable single-target |
-| ❄️ Frost Emitter | $75 | Slows every ship it hits |
-| 🌀 Gatling Array | $110 | Very fast fire, shreds light ships |
-| 💥 Plasma Mortar | $160 | Lobbed shots with splash damage |
-| ⚡ Tesla Coil | $220 | Lightning that chains between ships |
-| 🎯 Rail Cannon | $320 | Long range, pierces everything in a line |
+| 🔫 Pulse Blaster | $50 | Cheap all-rounder — no weakness, no specialty |
+| ❄️ Frost Emitter | $75 | Slows ships, reveals Phantoms, extinguishes Brute fire shields |
+| 🌀 Gatling Array | $110 | Rapid fire — shreds swarms, strips Warden shields |
+| 🛰️ Command Beacon | $140 | Support — boosts damage & fire rate of nearby turrets |
+| 💥 Plasma Mortar | $160 | Splash — wipes clusters, hits cloaked ships |
+| ⚡ Tesla Coil | $220 | Lightning arcs through a whole pack, hits cloaked ships |
+| 🎯 Rail Cannon | $320 | Long-range pierce — busts tanks & armor, overkills chaff |
 
-Each turret upgrades twice (click a built turret), and sells back for 70% of what you put in.
+Each turret upgrades twice (tap a built turret), and sells back for 70% of what you put in. Every enemy type counters a lazy build, so no single turret carries a run — Brutes shrug off non-Frost fire, Wardens eat single big shots (rapid fire strips them), Aegis armor bounces light rounds (heavy shots punch through), Phantoms need splash/arc/Frost, and Menders heal packs (pierce and chain reach them).
 
 ## Structure
 

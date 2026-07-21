@@ -531,13 +531,17 @@ canvas {
 .tower-cards {
   display: flex;
   flex-direction: column;
-  justify-content: center; /* center the card stack instead of stacking from
-    the top, which left dead space at the bottom */
+  justify-content: flex-start;
   gap: 6px;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
 }
+/* Auto margins center the stack when there's spare height, but collapse to 0
+   when the 7 cards overflow a short (landscape-phone) screen — so nothing is
+   clipped-and-unreachable the way plain `justify-content: center` leaves it. */
+.tower-cards > .tower-card:first-child { margin-top: auto; }
+.tower-cards > .tower-card:last-child { margin-bottom: auto; }
 .tower-card {
   background: rgba(8, 12, 34, 0.78);
   border: 1.5px solid rgba(255,255,255,0.15);

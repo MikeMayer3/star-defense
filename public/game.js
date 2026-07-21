@@ -706,13 +706,13 @@ function pathPoint(map, s) {
 }
 
 /* ======================================================================
-   TOWER TYPES — 6 turrets, each with 3 levels (base + 2 upgrades).
+   TOWER TYPES — 7 turrets, each with 3 levels (base + 2 upgrades).
    dmg = per shot · rate = shots/sec · range in cells.
    ====================================================================== */
 const TOWER_TYPES = [
   {
     id: 'blaster', name: 'Pulse Blaster', icon: '🔫', color: '#4bf5ff', glow: 'rgba(75,245,255,0.45)',
-    desc: 'Basic all-around shooter', cost: 50, dmg: 13, rate: 1.6, range: 2.7, upCost: [40, 80],
+    desc: 'Cheap all-rounder — no weakness, no specialty', cost: 50, dmg: 18, rate: 1.6, range: 3.0, upCost: [40, 80],
   },
   {
     id: 'frost', name: 'Frost Emitter', icon: '❄️', color: '#9fd8ff', glow: 'rgba(159,216,255,0.45)',
@@ -720,24 +720,19 @@ const TOWER_TYPES = [
   },
   {
     id: 'gatling', name: 'Gatling Array', icon: '🌀', color: '#5dffb0', glow: 'rgba(93,255,176,0.45)',
-    desc: 'Rapid fire — melts fast, light ships', cost: 110, dmg: 6, rate: 5.5, range: 2.4, upCost: [85, 165],
+    desc: 'Rapid fire — shreds swarms, strips Warden shields', cost: 110, dmg: 10, rate: 5.5, range: 2.6, upCost: [85, 165],
   },
   {
     id: 'mortar', name: 'Plasma Mortar', icon: '💥', color: '#ff4ecb', glow: 'rgba(255,78,203,0.45)',
-    desc: 'Splash damage hits a whole cluster', cost: 160, dmg: 42, rate: 0.55, range: 3.7, upCost: [130, 250],
+    desc: 'Splash — wipes whole clusters, weak on lone tanks', cost: 160, dmg: 50, rate: 0.55, range: 3.7, upCost: [130, 250],
   },
   {
     id: 'tesla', name: 'Tesla Coil', icon: '⚡', color: '#b46dff', glow: 'rgba(180,109,255,0.45)',
-    desc: 'Lightning chains between ships', cost: 220, dmg: 24, rate: 1.1, range: 2.7, upCost: [175, 340],
-    // TEMP: hidden from the shop for now. Left in place at its existing
-    // array index (not deleted) so t.type on any already-placed/saved
-    // tower and every other tower's index stay stable — only
-    // buildShopCards() below skips rendering a card for it.
-    hidden: true,
+    desc: 'Lightning arcs through a whole pack at once', cost: 220, dmg: 30, rate: 1.15, range: 2.8, upCost: [175, 340],
   },
   {
     id: 'rail', name: 'Rail Cannon', icon: '🎯', color: '#ffe74b', glow: 'rgba(255,231,75,0.45)',
-    desc: 'Heavy shot pierces straight down the line', cost: 320, dmg: 95, rate: 0.45, range: 5.2, upCost: [255, 490],
+    desc: 'Long-range pierce — busts tanks & armor, overkills chaff', cost: 320, dmg: 85, rate: 0.45, range: 4.3, upCost: [255, 490],
   },
   {
     id: 'beacon', name: 'Command Beacon', icon: '🛰️', color: '#ffaa33', glow: 'rgba(255,170,51,0.45)',
@@ -757,7 +752,7 @@ function towerStats(t) {
     // type specials scale with level too
     slowPct: 0.42 + 0.08 * l,     // frost
     slowDur: 1.6 + 0.35 * l,      // frost
-    splash: 1.25 + 0.2 * l,       // mortar
+    splash: 1.55 + 0.2 * l,       // mortar
     chains: 3 + l,                // tesla (extra jumps beyond first target)
     buffDmg: ty.buffDmg ? ty.buffDmg + 0.05 * l : 0,   // beacon
     buffRate: ty.buffRate ? ty.buffRate + 0.05 * l : 0, // beacon
@@ -784,7 +779,7 @@ const ENEMY_TYPES = {
   raider:  { name: 'Raider',  icon: '▶', hp: 60,   speed: 1.6, reward: 7,  leak: 1,  radius: 0.3,  color: '#ff4ecb', shape: 'dart', debutMap: 0, debutWave: 2,
              trait: 'Tougher assault ship.' },
   brute:   { name: 'Brute',   icon: '⬢', hp: 170,  speed: 1.0, reward: 13, leak: 2,  radius: 0.36, color: '#ff8c3c', shape: 'hex', fireShield: true, debutMap: 0, debutWave: 5,
-             trait: 'Wrapped in a fire shield that cuts all other damage by 75% — only Frost\'s chill can extinguish it.' },
+             trait: 'Wrapped in a fire shield that halves other damage — Frost\'s chill extinguishes it outright for full damage.' },
   swarm:   { name: 'Swarmer', icon: '▴', hp: 10,   speed: 2.7, reward: 2,  leak: 1,  radius: 0.17, color: '#5dffb0', shape: 'tri', debutMap: 0, debutWave: 6, announce: true,
              trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
   shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'diamond', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
@@ -794,7 +789,7 @@ const ENEMY_TYPES = {
   aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'pentagon', armor: 6, debutMap: 6, debutWave: 8, announce: true,
              trait: 'Plating deflects flat damage from every hit — light rounds bounce off, heavy shots punch through.' },
   phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'ring', cloak: true, debutMap: 13, debutWave: 8, announce: true,
-             trait: 'Cloaked — turrets can\'t lock on until it\'s slowed. Frost sees through the cloak.' },
+             trait: 'Cloaked — lock-on turrets can\'t target it until it\'s slowed. Frost reveals it; Mortar splash and Tesla arcs hit it without a lock.' },
   mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 20, debutWave: 8, announce: true,
              trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
   // Boss leak costs are budgeted against the 20-life bar: late-campaign
@@ -1096,15 +1091,16 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
       return;
     }
   }
-  // Brute fire shield: cuts non-Frost damage by 75%. A Frost hit
-  // extinguishes it for good (and still deals its own damage in full).
+  // Brute fire shield: halves non-Frost damage (so other towers can still
+  // grind it down, just slower). A Frost hit extinguishes it for good — the
+  // clean counter — and still deals its own damage in full.
   if (e.fireShield) {
     if (fromFrost) {
       e.fireShield = false;
       addFloat(e.x, e.y, 'EXTINGUISHED', '#9fd8ff');
       fx.push({ kind: 'ring', x: e.x, y: e.y, life: 0.2, maxLife: 0.22, r: e.def.radius * 1.8, color: '#9fd8ff' });
     } else {
-      dmg *= 0.25;
+      dmg *= 0.5;
     }
   }
   e.hp -= dmg;
@@ -1204,7 +1200,7 @@ function fireTower(t, st, target) {
         dmg *= 0.72;
         let next = null, bd = 2.3;
         for (const e of enemies) {
-          if (e.dead || hitSet.has(e) || !revealed(e)) continue;
+          if (e.dead || hitSet.has(e)) continue; // arcs jump to cloaked ships too
           const d = Math.hypot(e.x - cur.x, e.y - cur.y);
           if (d < bd) { bd = d; next = e; }
         }
@@ -1997,7 +1993,11 @@ function update(dt) {
     }
     st.dmg *= 1 + bestBuffDmg;
     st.rate *= 1 + bestBuffRate;
-    const seesCloaked = tty.id === 'frost';
+    // Cloak defeats a targeting lock, not an area/field weapon — Frost's
+    // chill reveals it, and Mortar splash / Tesla arcs hit it without needing
+    // to lock on. So a Blaster/Gatling/Rail-only board still leaks phantoms
+    // (buy a counter), but there are several answers, not just Frost.
+    const seesCloaked = tty.id === 'frost' || tty.id === 'mortar' || tty.id === 'tesla';
     let best = null, bestS = -1;
     for (const e of enemies) {
       if (e.dead) continue;
