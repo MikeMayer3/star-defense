@@ -87,70 +87,135 @@ const Sound = (() => {
   }
 
   // Background music: looping synth patterns scheduled with absolute
-  // AudioContext timestamps so they stay sample-accurate. Each track is a
-  // 4-bar chord progression (Am–F–C–G family), 32 steps per loop, so it
-  // takes far longer to repeat than a single bar.
+  // AudioContext timestamps so they stay sample-accurate. Tracks are written
+  // on an 8th-note grid from named notes (so patterns read like sheet music);
+  // each is an 8-bar chord progression (64 steps) with a bassline, an
+  // arpeggio, an optional lead counter-melody and hats — busier and quicker
+  // than the old 4-bar quarter-note loops, with more movement before it
+  // repeats. Every note is a chord tone of its bar, so it always stays in key.
+  const HZ = {
+    E2: 82.41, F2: 87.31, G2: 98.00, A2: 110.00, B2: 123.47,
+    C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, B3: 246.94,
+    C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
+    C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77,
+    C6: 1046.50,
+  };
+  // turn a list of note names ('' = rest) into a frequency step-array
+  const seq = (names) => names.map((n) => (n ? HZ[n] : 0));
+
   const MUSIC_TRACKS = {
+    // Drift — mellow, flowing. Am F C G · Am F G Am
     drift: {
-      name: 'Drift', bpm: 96,
-      bass: [
-        110.00, 0, 0, 110.00, 0, 0, 164.81, 0,       // Am
-        87.31, 0, 0, 87.31, 0, 0, 130.81, 0,          // F
-        130.81, 0, 0, 130.81, 0, 0, 196.00, 0,        // C
-        98.00, 0, 0, 98.00, 0, 0, 146.83, 0,          // G
-      ],
-      arp: [
-        220.00, 261.63, 329.63, 440.00, 523.25, 440.00, 329.63, 261.63,
-        174.61, 220.00, 261.63, 349.23, 440.00, 349.23, 261.63, 220.00,
-        261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 196.00,
-        196.00, 246.94, 293.66, 392.00, 493.88, 392.00, 293.66, 246.94,
-      ],
-      hat: null,
-      bassType: 'triangle', arpType: 'sine',
-    },
-    pulse: {
-      name: 'Pulse', bpm: 130,
-      bass: [
-        110.00, 110.00, 220.00, 110.00, 110.00, 220.00, 110.00, 164.81,   // Am
-        87.31, 87.31, 174.61, 87.31, 87.31, 174.61, 87.31, 130.81,        // F
-        130.81, 130.81, 261.63, 130.81, 130.81, 261.63, 130.81, 196.00,   // C
-        98.00, 98.00, 196.00, 98.00, 98.00, 196.00, 98.00, 146.83,        // G
-      ],
-      arp: [
-        440.00, 0, 523.25, 440.00, 659.25, 523.25, 440.00, 329.63,
-        349.23, 0, 440.00, 349.23, 523.25, 440.00, 349.23, 261.63,
-        523.25, 0, 659.25, 523.25, 783.99, 659.25, 523.25, 392.00,
-        392.00, 0, 493.88, 392.00, 587.33, 493.88, 392.00, 293.66,
-      ],
+      name: 'Drift', bpm: 112,
+      bass: seq([
+        'A2', '', 'E3', '', 'A2', '', 'C3', '',
+        'F2', '', 'C3', '', 'F2', '', 'A2', '',
+        'C3', '', 'G3', '', 'C3', '', 'E3', '',
+        'G2', '', 'D3', '', 'G2', '', 'B2', '',
+        'A2', '', 'E3', '', 'A2', '', 'C3', '',
+        'F2', '', 'C3', '', 'F2', '', 'A2', '',
+        'G2', '', 'D3', '', 'G2', '', 'D3', '',
+        'A2', '', 'E3', '', 'A2', '', 'E3', '',
+      ]),
+      arp: seq([
+        'A3', 'C4', 'E4', 'A4', 'E4', 'C4', 'E4', 'C4',
+        'A3', 'C4', 'F4', 'A4', 'F4', 'C4', 'A3', 'C4',
+        'C4', 'E4', 'G4', 'C5', 'G4', 'E4', 'G4', 'E4',
+        'B3', 'D4', 'G4', 'B4', 'G4', 'D4', 'G4', 'D4',
+        'E4', 'A4', 'C5', 'A4', 'E4', 'C4', 'A3', 'E4',
+        'F4', 'A4', 'C5', 'A4', 'F4', 'C4', 'A3', 'F3',
+        'D4', 'G4', 'B4', 'D5', 'B4', 'G4', 'D4', 'B3',
+        'A3', 'C4', 'E4', 'A4', 'C5', 'A4', 'E4', 'A3',
+      ]),
+      lead: seq([
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', '', 'E5', '', '',
+        '', '', '', '', '', 'D5', '', '',
+        '', '', 'E5', '', '', 'C5', '', 'A4',
+        '', '', 'F5', '', '', 'C5', '', 'A4',
+        '', '', 'D5', '', '', 'B4', '', 'G4',
+        '', '', 'C5', '', '', 'A4', '', 'E4',
+      ]),
       hat: [
-        1, 0, 1, 1, 1, 0, 1, 0,
-        1, 0, 1, 1, 1, 0, 1, 0,
-        1, 0, 1, 1, 1, 0, 1, 0,
-        1, 1, 1, 0, 1, 1, 1, 1,
+        0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+        0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+        1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+        1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+      ],
+      bassType: 'triangle', arpType: 'sine', leadType: 'sine',
+    },
+    // Pulse — driving, punchy. Am Am F F · G G Am G
+    pulse: {
+      name: 'Pulse', bpm: 140,
+      bass: seq([
+        'A2', 'A2', 'A3', 'A2', 'A2', 'A2', 'A3', 'E3',
+        'A2', 'A2', 'A3', 'A2', 'A2', 'E3', 'A3', 'C3',
+        'F2', 'F2', 'F3', 'F2', 'F2', 'F2', 'F3', 'C3',
+        'F2', 'F2', 'F3', 'F2', 'F2', 'C3', 'F3', 'A2',
+        'G2', 'G2', 'G3', 'G2', 'G2', 'G2', 'G3', 'D3',
+        'G2', 'G2', 'G3', 'G2', 'G2', 'D3', 'G3', 'B2',
+        'A2', 'A2', 'A3', 'A2', 'A2', 'A2', 'A3', 'E3',
+        'G2', 'G2', 'G3', 'G2', 'G2', 'D3', 'B2', 'D3',
+      ]),
+      arp: seq([
+        'A4', 'C5', 'E5', 'C5', 'A4', 'E4', 'A4', 'C5',
+        'E5', 'C5', 'A4', 'C5', 'E5', 'A5', 'E5', 'C5',
+        'F4', 'A4', 'C5', 'A4', 'F4', 'C4', 'F4', 'A4',
+        'C5', 'A4', 'F4', 'A4', 'C5', 'F5', 'C5', 'A4',
+        'G4', 'B4', 'D5', 'B4', 'G4', 'D4', 'G4', 'B4',
+        'D5', 'B4', 'G4', 'B4', 'D5', 'G5', 'D5', 'B4',
+        'A4', 'C5', 'E5', 'A5', 'E5', 'C5', 'A4', 'E4',
+        'G4', 'B4', 'D5', 'G5', 'D5', 'B4', 'G4', 'D4',
+      ]),
+      hat: [
+        1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1,
+        1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1,
+        1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1,
+        1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
       ],
       bassType: 'sawtooth', arpType: 'square',
     },
+    // Nova — bright, intense, syncopated. F G Am C · F G Am G
     nova: {
-      name: 'Nova', bpm: 138,
-      bass: [
-        87.31, 0, 87.31, 87.31, 0, 87.31, 0, 130.81,     // F
-        98.00, 0, 98.00, 98.00, 0, 98.00, 0, 146.83,     // G
-        110.00, 0, 110.00, 110.00, 0, 110.00, 0, 164.81, // Am
-        130.81, 0, 130.81, 130.81, 0, 130.81, 0, 196.00, // C
-      ],
-      arp: [
-        349.23, 440.00, 523.25, 440.00, 349.23, 523.25, 698.46, 523.25,
-        392.00, 493.88, 587.33, 493.88, 392.00, 587.33, 783.99, 587.33,
-        440.00, 523.25, 659.25, 523.25, 440.00, 659.25, 880.00, 659.25,
-        523.25, 659.25, 783.99, 659.25, 523.25, 783.99, 659.25, 587.33,
-      ],
+      name: 'Nova', bpm: 148,
+      bass: seq([
+        'F2', '', 'F3', 'F2', '', 'F2', 'C3', '',
+        'G2', '', 'G3', 'G2', '', 'G2', 'D3', '',
+        'A2', '', 'A3', 'A2', '', 'A2', 'E3', '',
+        'C3', '', 'C4', 'C3', '', 'C3', 'G3', '',
+        'F2', 'F2', 'F3', '', 'F2', '', 'C3', 'A2',
+        'G2', 'G2', 'G3', '', 'G2', '', 'D3', 'B2',
+        'A2', 'A2', 'A3', '', 'A2', '', 'E3', 'C3',
+        'G2', 'G2', 'G3', '', 'G2', 'D3', 'B2', 'D3',
+      ]),
+      arp: seq([
+        'F4', 'A4', 'C5', 'F5', 'C5', 'A4', 'C5', 'F4',
+        'G4', 'B4', 'D5', 'G5', 'D5', 'B4', 'D5', 'G4',
+        'A4', 'C5', 'E5', 'A5', 'E5', 'C5', 'E5', 'A4',
+        'C5', 'E5', 'G5', 'C5', 'G4', 'E4', 'G4', 'C5',
+        'A4', 'C5', 'F5', 'A5', 'F5', 'C5', 'A4', 'F4',
+        'G4', 'B4', 'D5', 'G5', 'B4', 'D5', 'G4', 'B4',
+        'A4', 'C5', 'E5', 'A5', 'E5', 'C5', 'A4', 'E4',
+        'G4', 'B4', 'D5', 'G5', 'D5', 'B4', 'G4', 'D4',
+      ]),
+      lead: seq([
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '',
+        '', '', 'A5', '', '', 'F5', '', 'C5',
+        '', '', 'D5', '', '', 'G5', '', 'B4',
+        '', '', 'E5', '', '', 'A5', '', 'C5',
+        '', '', 'D5', '', '', 'B4', '', 'G4',
+      ]),
       hat: [
-        1, 1, 0, 1, 1, 1, 0, 1,
-        1, 1, 0, 1, 1, 1, 0, 1,
-        1, 1, 0, 1, 1, 1, 0, 1,
-        1, 1, 1, 1, 1, 1, 1, 1,
+        1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1,
+        1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
       ],
-      bassType: 'square', arpType: 'sawtooth',
+      bassType: 'square', arpType: 'sawtooth', leadType: 'triangle',
     },
   };
   const MUSIC_TRACK_KEY = 'stardefense_musicTrack';
@@ -189,15 +254,16 @@ const Sound = (() => {
   }
   function scheduleMusicBar(startTime) {
     const track = MUSIC_TRACKS[currentTrackId];
-    const beat = 60 / track.bpm;
+    const step = 30 / track.bpm; // 8th-note grid (half of a 60/bpm beat)
     const steps = track.bass.length;
     for (let i = 0; i < steps; i++) {
-      const t = startTime + i * beat;
-      if (track.bass[i]) musicNote(track.bass[i], t, beat * 0.9, track.bassType, 0.05);
-      if (track.arp[i]) musicNote(track.arp[i], t, beat * 0.5, track.arpType, 0.032);
-      if (track.hat && track.hat[i]) musicHat(t, 0.02);
+      const t = startTime + i * step;
+      if (track.bass[i]) musicNote(track.bass[i], t, step * 1.7, track.bassType, 0.05);
+      if (track.arp[i]) musicNote(track.arp[i], t, step * 0.95, track.arpType, 0.030);
+      if (track.lead && track.lead[i]) musicNote(track.lead[i], t, step * 1.6, track.leadType || 'triangle', 0.028);
+      if (track.hat && track.hat[i]) musicHat(t, 0.018);
     }
-    return beat * steps;
+    return step * steps;
   }
   function startMusic() {
     if (!musicEnabled || musicHandle) return;
