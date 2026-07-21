@@ -870,7 +870,7 @@ function towerStats(t) {
     splitFrac: 0.55 + 0.05 * l,   // prism: damage of each sub-beam
     overclockRate: 0.95 + 0.25 * l, // pylon: fire-rate boost during its burst window
     // --- Gravitics ---
-    push: 0.18 + 0.05 * l,        // mass driver: cells shoved back per hit
+    push: 0.09 + 0.03 * l,        // mass driver: cells shoved back per hit
     pull: 0.30 + 0.08 * l,        // singularity: cells dragged toward the well per pulse
     pinDur: 0.5 + 0.15 * l,       // graviton: seconds held in place
     coneDeg: 34 + 4 * l,          // flak: half-angle of the shrapnel cone
@@ -1419,14 +1419,43 @@ function fireTower(t, st, target) {
       // dragged toward the well's own point on its lane, slowed and drained.
       // Clumping is the real payload — it sets up every splash tower.
       const map = currentMap();
+      // Only ONE well moves a given ship: the nearest. Two overlapping wells
+      // each used to drag toward their own anchor point, so a ship caught
+      // between them was yanked back and forth and visibly juddered — they
+      // fought over where it should sit. Damage and slow still come from
+      // every well in range (they're ordinary damage sources); it's only
+      // POSITION that needs a single authority, the same non-stacking rule
+      // Beacon and Pylon auras already use.
+      const wells = towers.filter((w) => TOWER_TYPES[w.type].id === 'singularity');
       for (const e of enemies) {
         if (e.dead) continue;
         if (Math.hypot(e.x - t.x, e.y - t.y) > st.range) continue;
         damageEnemy(e, st.dmg, ty.color);
         if (e.dead) continue;
-        // find the distance-along-lane closest to this tower, then drag the
-        // ship toward it (never past it, so it can't be yanked backwards
-        // through the whole level or shoved forward into the base)
+        e.slowPct = Math.max(e.slowPct * (state.waveTime < e.slowUntil ? 1 : 0), st.slowPct);
+        e.slowUntil = state.waveTime + st.slowDur;
+
+        // Ownership is STICKY: a well keeps a ship until that ship leaves its
+        // range, and only then does the nearest well claim it. Picking the
+        // nearest every frame isn't enough on its own — as a ship drifts past
+        // the midpoint between two wells, ownership flaps back and forth and
+        // it gets handed between their two anchor points, which is the
+        // juddering the player saw.
+        const owner = e.wellOwner;
+        const ownerValid = owner && wells.includes(owner)
+          && Math.hypot(e.x - owner.x, e.y - owner.y) <= towerStats(owner).range;
+        if (!ownerValid) {
+          let nearest = null, od = Infinity;
+          for (const w of wells) {
+            const d = Math.hypot(e.x - w.x, e.y - w.y);
+            if (d < od) { od = d; nearest = w; }
+          }
+          e.wellOwner = nearest;
+        }
+        if (e.wellOwner !== t) continue;
+
+        // drag toward the point on this ship's lane nearest the well (never
+        // past it, so it can't be yanked back through the whole level)
         const P = enemyPath(map, e.path);
         let bestS = e.s, bestD = 1e9;
         for (let s = Math.max(0, e.s - 2.2); s <= Math.min(P.totalLen, e.s + 2.2); s += 0.2) {
@@ -1435,8 +1464,6 @@ function fireTower(t, st, target) {
           if (d < bestD) { bestD = d; bestS = s; }
         }
         shoveEnemy(e, Math.max(-st.pull, Math.min(st.pull, bestS - e.s)));
-        e.slowPct = Math.max(e.slowPct * (state.waveTime < e.slowUntil ? 1 : 0), st.slowPct);
-        e.slowUntil = state.waveTime + st.slowDur;
       }
       fx.push({ kind: 'ring', x: t.x, y: t.y, life: 0.3, maxLife: 0.3, r: st.range, color: ty.color });
       Sound.shotFrost();
@@ -1525,7 +1552,10 @@ function effSlow(e) {
 const SUPERBOSS_SPLIT_HP = 0.3;
 
 const REWIND_CAP = 2.5;
-const SHOVE_BUDGET = 4;
+const SHOVE_BUDGET = 3;
+// Minimum seconds between knockbacks on the same ship, regardless of how
+// many Mass Drivers are firing at it.
+const PUSH_COOLDOWN = 0.4;
 function shoveEnemy(e, delta) {
   if (delta < 0) {
     const remaining = SHOVE_BUDGET - (e.shoved || 0);
@@ -2455,7 +2485,13 @@ function update(dt) {
       // Mass Driver knockback: shove the ship back along its own lane.
       // Never past the spawn, and bosses are too massive to budge (otherwise
       // a wall of drivers could stunlock the whole fight at the entrance).
-      if (b.push && !tg.dead && tg.type !== 'boss' && tg.type !== 'superboss') {
+      // A ship can only be knocked back so OFTEN, however many drivers are
+      // shooting it. Without this cap the knockback scaled with driver count:
+      // a wall of the cheapest tower in the act chain-shoved everything and
+      // stalled the lane, which made them strictly the best buy.
+      if (b.push && !tg.dead && tg.type !== 'boss' && tg.type !== 'superboss'
+          && state.waveTime - (tg.lastPush || -9) >= PUSH_COOLDOWN) {
+        tg.lastPush = state.waveTime;
         shoveEnemy(tg, -b.push);
       }
       b.hit = true;
