@@ -947,13 +947,15 @@ const ENEMY_TYPES = {
              trait: 'Tiny and fast, attacks in tight packs — splash and chains shred them.' },
   shield:  { name: 'Warden',  icon: '◈', hp: 95,   speed: 1.4, reward: 12, leak: 2,  radius: 0.32, color: '#4bf5ff', shape: 'diamond', shieldHits: 6, debutMap: 0, debutWave: 8, announce: true,
              trait: 'Energy shield blocks the first hits outright — rapid fire strips it, heavy shots are wasted on it.' },
-  // debutMap indices spread the special threats across the 40-level
-  // campaign (levels 7 / 14 / 21) instead of the old 5-map spacing
-  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'pentagon', armor: 6, debutMap: 6, debutWave: 8, announce: true,
+  // One new threat per ACT, debuting on that act's first level (11 / 21 / 31)
+  // so a new toolbox and a new problem to solve arrive together and each act
+  // reads as a chapter. They used to land at 7 / 14 / 21 — out of step with
+  // the arsenal swaps, so you met a new enemy mid-act with no new answer.
+  aegis:   { name: 'Aegis',   icon: '⬟', hp: 150,  speed: 1.05, reward: 15, leak: 2, radius: 0.34, color: '#8fa8ff', shape: 'pentagon', armor: 6, debutMap: 10, debutWave: 6, announce: true,
              trait: 'Plating deflects flat damage from every hit — light rounds bounce off, heavy shots punch through.' },
-  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'ring', cloak: true, debutMap: 13, debutWave: 8, announce: true,
+  phantom: { name: 'Phantom', icon: '◌', hp: 75,   speed: 1.9, reward: 12, leak: 1,  radius: 0.28, color: '#c58bff', shape: 'ring', cloak: true, debutMap: 20, debutWave: 6, announce: true,
              trait: 'Cloaked — lock-on turrets can\'t target it until it\'s slowed. Frost reveals it; Mortar splash and Tesla arcs hit it without a lock.' },
-  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 20, debutWave: 8, announce: true,
+  mender:  { name: 'Mender',  icon: '✚', hp: 110,  speed: 1.25, reward: 18, leak: 1, radius: 0.3,  color: '#59ffb6', shape: 'orb', heal: 8, healRange: 1.6, debutMap: 30, debutWave: 6, announce: true,
              trait: 'Repairs nearby hulls — focus it down first. Pierce and chain hits reach it mid-pack.' },
   // Boss leak costs are budgeted against the 20-life bar: late-campaign
   // bosses are tanky enough that one often walks through even a maxed
@@ -1125,7 +1127,7 @@ function buildWave(mapIdx, w) {
 
   // this level's new enemy debuts as a showcased block (keys match the
   // types' debutMap indices)
-  const debut = ({ 0: 'shield', 6: 'aegis', 13: 'phantom', 20: 'mender' })[mapIdx];
+  const debut = ({ 0: 'shield', 10: 'aegis', 20: 'phantom', 30: 'mender' })[mapIdx];
   if (debut && ENEMY_TYPES[debut].debutMap === mapIdx && w === ENEMY_TYPES[debut].debutWave) {
     if (debut === 'mender') { push('mender'); lineOf('raider', 3); push('mender'); lineOf('raider', 3); }
     else lineOf(debut, 4);
@@ -2224,7 +2226,14 @@ window.addEventListener('keydown', (ev) => {
    HUD
    ====================================================================== */
 function updateHUD() {
-  $('moneyVal').textContent = '$' + Math.floor(state.money).toLocaleString();
+  // Exact below $100k — that's the range where you're deciding whether a
+  // specific upgrade is affordable. Above it, abbreviate: the left rail is
+  // only ~92px on a landscape phone and "$999,999" wrapped onto two lines.
+  const m = Math.floor(state.money);
+  // 999_500+ rolls straight to M so it can't render the silly "$1000k"
+  $('moneyVal').textContent = m >= 999500 ? '$' + (m / 1e6).toFixed(1) + 'M'
+    : m >= 1e5 ? '$' + Math.round(m / 1e3) + 'k'
+    : '$' + m.toLocaleString();
   $('livesVal').textContent = state.lives;
   $('waveVal').textContent = state.level + ' / ' + TOTAL_WAVES;
   document.querySelector('.lives-stat').classList.toggle('danger', state.lives <= 5);

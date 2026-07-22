@@ -1,7 +1,7 @@
 {
   "name": "Star Defense",
   "short_name": "StarDefense",
-  "description": "Neon tower defense — beat all 5 maps, 30 waves each.",
+  "description": "Neon tower defense — 40 levels of 30 waves, four turret arsenals.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
