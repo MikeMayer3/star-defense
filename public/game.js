@@ -1249,7 +1249,7 @@ const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), sh
 
 // The main menu is split across a few overlay screens (home, level select,
 // settings, about) — only one shows at a time while state.mode === 'menu'.
-const MENU_SCREENS = ['menu', 'levelSelect', 'leaderboard', 'settings', 'about'];
+const MENU_SCREENS = ['menu', 'levelSelect', 'leaderboard', 'achievements', 'settings', 'about'];
 function showMenuScreen(id) {
   for (const s of MENU_SCREENS) $(s).classList.toggle('hidden', s !== id);
 }
@@ -1346,6 +1346,7 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     state.earned += e.reward;
     state.score += e.reward * 10;
     state.kills++;
+    achOnKill(e.type);
     addFloat(e.x, e.y, '+$' + e.reward, '#ffe74b');
     const big = e.type === 'boss' || e.type === 'superboss';
     burst(e.x, e.y, e.def.color, e.type === 'superboss' ? 60 : big ? 40 : 10, e.type === 'superboss' ? 3 : big ? 2.2 : 1);
@@ -1859,6 +1860,7 @@ function endGame(victory) {
   Wake.disable(); // run's over — let the results screen sleep normally
   updateWavePreview();
   offerScoreEntry(); // reveals the name-entry row if it's a top-20 score
+  achOnRunEnd(victory);
 }
 
 function leak(e) {
@@ -2162,6 +2164,7 @@ const BACKUP_KEYS = [
   'stardefense_mapProgress', 'stardefense_hiScore', 'stardefense_difficulty',
   'stardefense_musicTrack', 'stardefense_playerName',
   'stardefense_sfx', 'stardefense_music', 'stardefense_coachDone',
+  'stardefense_achievements', 'stardefense_achStats',
 ];
 
 function collectSaveKeys() {
@@ -2267,6 +2270,7 @@ function placeTowerAt(typeIndex, col, row) {
   burst(t.x, t.y, ty.color, 10);
   updateHUD();
   Coach.notify('placed');
+  if (state.builtTypes) { state.builtTypes.add(typeIndex); achOnPlace(); }
   return true;
 }
 
@@ -2489,6 +2493,111 @@ const Wake = (() => {
 })();
 
 /* ======================================================================
+   ACHIEVEMENTS — local, persisted in this browser. A small set of goals
+   that reward playing the whole campaign and playing it well, so the 40
+   levels have reasons to be replayed. Kill/earn counters accumulate in
+   memory during a run and are committed at run end (cheap — no per-kill
+   localStorage write), while one-shot goals unlock the moment they happen.
+   ====================================================================== */
+const ACH_KEY = 'stardefense_achievements';
+const ACH_STATS_KEY = 'stardefense_achStats'; // lifetime { kills, earned, arsenalsWon }
+
+const ACHIEVEMENTS = [
+  { id: 'first_blood',    icon: '💥', name: 'First Blood',     desc: 'Destroy your first alien ship.' },
+  { id: 'first_stand',    icon: '🛡️', name: 'First Stand',     desc: 'Clear your first level.' },
+  { id: 'boss_down',      icon: '☠️', name: 'Giant Slayer',    desc: 'Take down a Dreadnought.' },
+  { id: 'flawless',       icon: '💎', name: 'Flawless',        desc: 'Clear a level without losing a shield.' },
+  { id: 'full_arsenal',   icon: '🏭', name: 'Full Loadout',    desc: 'Build every turret in an arsenal in one run.' },
+  { id: 'veteran_win',    icon: '🔥', name: 'Hardened',        desc: 'Clear a level on Veteran.' },
+  { id: 'centurion',      icon: '🎯', name: 'Centurion',       desc: 'Destroy 1,000 ships in total.' },
+  { id: 'all_arsenals',   icon: '⚙️', name: 'Master Armorer',  desc: 'Win a level with all four arsenals.' },
+  { id: 'tycoon',         icon: '💰', name: 'Space Tycoon',    desc: 'Bank 1,000,000 Space Bucks in total.' },
+  { id: 'flagship_killer',icon: '💀', name: 'Flagship Killer', desc: 'Destroy the Super Dreadnought.' },
+  { id: 'armada_breaker', icon: '☄️', name: 'Armada Breaker',  desc: 'Destroy 25,000 ships in total.' },
+  { id: 'galaxy_saved',   icon: '🏆', name: 'Galaxy Saved',    desc: 'Clear all 40 levels.' },
+];
+
+let unlockedAch = (() => {
+  try { const r = JSON.parse(localStorage.getItem(ACH_KEY) || '[]'); return new Set(Array.isArray(r) ? r : []); }
+  catch (e) { return new Set(); }
+})();
+let achStats = (() => {
+  try {
+    const r = JSON.parse(localStorage.getItem(ACH_STATS_KEY) || '{}');
+    return { kills: (r && r.kills) || 0, earned: (r && r.earned) || 0,
+             arsenalsWon: (r && Array.isArray(r.arsenalsWon)) ? r.arsenalsWon : [] };
+  } catch (e) { return { kills: 0, earned: 0, arsenalsWon: [] }; }
+})();
+function saveAchStats() { try { localStorage.setItem(ACH_STATS_KEY, JSON.stringify(achStats)); } catch (e) { /* ignore */ } }
+
+let achToastTimer = null;
+function unlockAchievement(id) {
+  if (unlockedAch.has(id) || !ACHIEVEMENTS.some((a) => a.id === id)) return;
+  unlockedAch.add(id);
+  try { localStorage.setItem(ACH_KEY, JSON.stringify([...unlockedAch])); } catch (e) { /* ignore */ }
+  const def = ACHIEVEMENTS.find((a) => a.id === id);
+  const el = document.getElementById('achToast');
+  if (el) {
+    el.innerHTML = '<div class="toast-icon">' + def.icon + '</div><div>' +
+      '<div class="toast-text-label">ACHIEVEMENT UNLOCKED</div>' +
+      '<div class="toast-text-name">' + escapeHtml(def.name) + '</div></div>';
+    el.classList.remove('hidden');
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(achToastTimer);
+    achToastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+  }
+  try { Sound.waveClear(); } catch (e) { /* ignore */ }
+}
+
+// Per-kill: cheap in-memory counters; boss/flagship unlock immediately.
+function achOnKill(type) {
+  achStats.kills++;
+  if (achStats.kills >= 1) unlockAchievement('first_blood');
+  if (achStats.kills >= 1000) unlockAchievement('centurion');
+  if (achStats.kills >= 25000) unlockAchievement('armada_breaker');
+  if (type === 'boss') unlockAchievement('boss_down');
+  if (type === 'superboss') unlockAchievement('flagship_killer');
+}
+
+// Placing a turret: unlock once this run has built every type in its arsenal.
+function achOnPlace() {
+  const arsenalSize = TOWER_TYPES.filter((t) => t.set === activeArsenal() && !t.hidden).length;
+  if (state.builtTypes && state.builtTypes.size >= arsenalSize) unlockAchievement('full_arsenal');
+}
+
+// Run end: commit the lifetime counters; award clear-based goals on a win.
+function achOnRunEnd(victory) {
+  achStats.earned += state.earned;
+  if (achStats.earned >= 1_000_000) unlockAchievement('tycoon');
+  if (victory) {
+    unlockAchievement('first_stand');
+    if (state.lives >= diff().lives) unlockAchievement('flawless');
+    if (difficultyId === 'veteran') unlockAchievement('veteran_win');
+    if (mapsBeaten() >= MAPS.length) unlockAchievement('galaxy_saved');
+    const won = new Set(achStats.arsenalsWon);
+    won.add(arsenalFor(state.mapIndex));
+    achStats.arsenalsWon = [...won];
+    if (won.size >= ARSENALS.length) unlockAchievement('all_arsenals');
+  }
+  saveAchStats();
+}
+
+function renderAchievements() {
+  const list = $('achList');
+  const got = ACHIEVEMENTS.filter((a) => unlockedAch.has(a.id)).length;
+  $('achCount').textContent = got + ' / ' + ACHIEVEMENTS.length;
+  list.innerHTML = ACHIEVEMENTS.map((a) => {
+    const on = unlockedAch.has(a.id);
+    return '<div class="ach-row ' + (on ? 'unlocked' : '') + '">' +
+      '<div class="ach-icon">' + a.icon + '</div>' +
+      '<div class="ach-info">' +
+        '<div class="ach-name">' + (on ? escapeHtml(a.name) : '???') + '</div>' +
+        '<div class="ach-desc">' + (on ? escapeHtml(a.desc) : 'Locked') + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+/* ======================================================================
    FIRST-RUN COACH
    The game teaches its enemy rules well already (NEW CONTACT banners, the
    wave-preview intel chips), but nothing ever taught the basic LOOP: buy a
@@ -2580,6 +2689,7 @@ function startGame(mapIdx) {
   state.score = 0;
   state.kills = 0;
   state.earned = 0;
+  state.builtTypes = new Set(); // turret types built this run (for Full Loadout)
   state.autoTimer = 0;
   state.placing = null;
   state.selected = null;
@@ -2660,6 +2770,7 @@ function togglePause() {
 // Home-menu navigation between the overlay screens.
 $('levelSelectBtn').addEventListener('click', () => { buildMapCards(); showMenuScreen('levelSelect'); });
 $('leaderboardBtn').addEventListener('click', () => openLeaderboard());
+$('achievementsBtn').addEventListener('click', () => { renderAchievements(); showMenuScreen('achievements'); });
 $('settingsBtn').addEventListener('click', () => showMenuScreen('settings'));
 $('aboutBtn').addEventListener('click', () => showMenuScreen('about'));
 document.querySelectorAll('[data-back]').forEach((btn) =>

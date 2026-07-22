@@ -24,11 +24,22 @@
     <div class="home-actions">
       <button id="levelSelectBtn" class="primary-btn">🎯 LEVEL SELECT</button>
       <button id="leaderboardBtn" class="primary-btn secondary">🏆 LEADERBOARD</button>
+      <button id="achievementsBtn" class="primary-btn secondary">🎖️ ACHIEVEMENTS</button>
       <button id="settingsBtn" class="primary-btn secondary">⚙️ SETTINGS</button>
       <button id="aboutBtn" class="primary-btn secondary">ℹ️ ABOUT</button>
     </div>
 
     <div class="best-stats" id="bestStats">Levels cleared: 0 / 40 &nbsp;•&nbsp; High Score: 0</div>
+  </div>
+</div>
+
+<!-- ============ ACHIEVEMENTS ============ -->
+<div id="achievements" class="screen hidden">
+  <div class="menu-panel">
+    <h1 class="title"><span class="t1">ACHIEVE</span><span class="t2">MENTS</span></h1>
+    <div class="ach-progress">Unlocked: <span id="achCount">0 / 12</span></div>
+    <div class="achievements-list" id="achList"></div>
+    <button class="ghost-btn" data-back>◀ Back</button>
   </div>
 </div>
 
@@ -200,6 +211,7 @@
   <button class="coach-skip" id="coachSkip">Skip</button>
 </div>
 
+<div id="achToast" class="achievement-toast hidden"></div>
 <div id="banner" class="banner hidden"></div>
 
 <!-- ============ PAUSE ============ -->
