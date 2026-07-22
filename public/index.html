@@ -23,11 +23,26 @@
 
     <div class="home-actions">
       <button id="levelSelectBtn" class="primary-btn">🎯 LEVEL SELECT</button>
+      <button id="leaderboardBtn" class="primary-btn secondary">🏆 LEADERBOARD</button>
       <button id="settingsBtn" class="primary-btn secondary">⚙️ SETTINGS</button>
       <button id="aboutBtn" class="primary-btn secondary">ℹ️ ABOUT</button>
     </div>
 
     <div class="best-stats" id="bestStats">Levels cleared: 0 / 40 &nbsp;•&nbsp; High Score: 0</div>
+  </div>
+</div>
+
+<!-- ============ LEADERBOARD ============ -->
+<div id="leaderboard" class="screen hidden">
+  <div class="menu-panel">
+    <h1 class="title"><span class="t1">TOP</span><span class="t2">PILOTS</span></h1>
+    <div class="tab-row" id="lbTabs">
+      <button class="tab-btn" data-board="beginner">🌱 Beginner</button>
+      <button class="tab-btn" data-board="normal">🎯 Normal</button>
+      <button class="tab-btn" data-board="veteran">☠️ Veteran</button>
+    </div>
+    <div class="leaderboard-list" id="leaderboardList"></div>
+    <button class="ghost-btn" data-back>◀ Back</button>
   </div>
 </div>
 
@@ -202,8 +217,18 @@
       <div class="result-row"><span>Space Bucks Earned</span><strong id="finalEarned">$0</strong></div>
     </div>
     <div id="newRecord" class="new-record hidden">🏆 NEW BEST!</div>
+
+    <div id="scoreEntry" class="score-entry hidden">
+      <div class="score-entry-label">🏆 That's a leaderboard score! Enter your name:</div>
+      <div class="score-entry-row">
+        <input id="nameInput" class="name-input" maxlength="12" placeholder="PILOT" autocomplete="off" />
+        <button id="saveScoreBtn" class="primary-btn small-btn">SAVE</button>
+      </div>
+    </div>
+
     <button id="retryBtn" class="primary-btn">DEFEND AGAIN ▶</button>
     <button id="restartBtn" class="ghost-btn hidden">Restart Map (fresh)</button>
+    <button id="viewLbBtn" class="ghost-btn">🏆 View Leaderboard</button>
     <button id="menuBtn" class="ghost-btn">Main Menu</button>
   </div>
 </div>

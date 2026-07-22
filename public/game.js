@@ -1249,7 +1249,7 @@ const menuEl = $('menu'), topbarEl = $('topbar'), leftRailEl = $('leftRail'), sh
 
 // The main menu is split across a few overlay screens (home, level select,
 // settings, about) — only one shows at a time while state.mode === 'menu'.
-const MENU_SCREENS = ['menu', 'levelSelect', 'settings', 'about'];
+const MENU_SCREENS = ['menu', 'levelSelect', 'leaderboard', 'settings', 'about'];
 function showMenuScreen(id) {
   for (const s of MENU_SCREENS) $(s).classList.toggle('hidden', s !== id);
 }
@@ -1844,6 +1844,12 @@ function endGame(victory) {
     : (cp ? '▶ RETRY FROM WAVE ' + cp.wave : 'DEFEND AGAIN ▶');
   $('restartBtn').classList.toggle('hidden', !(!victory && cp));
 
+  // snapshot the run for the leaderboard (state.score/level/mapIndex get
+  // reset by the next startGame, so capture them now)
+  state.lastScore = state.score;
+  state.lastLevel = state.mapIndex + 1;
+  state.lastDiff = difficultyId;
+
   topbarEl.classList.add('hidden');
   leftRailEl.classList.add('hidden');
   shopEl.classList.add('hidden');
@@ -1852,6 +1858,7 @@ function endGame(victory) {
   Coach.stop();
   Wake.disable(); // run's over — let the results screen sleep normally
   updateWavePreview();
+  offerScoreEntry(); // reveals the name-entry row if it's a top-20 score
 }
 
 function leak(e) {
@@ -2563,10 +2570,125 @@ function togglePause() {
 
 // Home-menu navigation between the overlay screens.
 $('levelSelectBtn').addEventListener('click', () => { buildMapCards(); showMenuScreen('levelSelect'); });
+$('leaderboardBtn').addEventListener('click', () => openLeaderboard());
 $('settingsBtn').addEventListener('click', () => showMenuScreen('settings'));
 $('aboutBtn').addEventListener('click', () => showMenuScreen('about'));
 document.querySelectorAll('[data-back]').forEach((btn) =>
   btn.addEventListener('click', () => { buildMapCards(); showMenuScreen('menu'); }));
+
+/* ======================================================================
+   LEADERBOARD — shared across everyone, backed by a Cloudflare D1 table
+   (td_scores) via /api/scores. Same-origin, so no CORS. Boards are split by
+   difficulty because scores across tiers aren't comparable. Degrades to a
+   friendly inline message if the API can't be reached (e.g. offline, or
+   before the D1 table has been created).
+   ====================================================================== */
+const LB_KEY_NAME = 'stardefense_playerName';
+let lbBoard = 'normal';        // which difficulty tab is showing
+let lastSubmitted = null;      // {board, score} of a score we just posted (to highlight it)
+
+async function fetchLeaderboard(board) {
+  const res = await fetch('/api/scores?board=' + encodeURIComponent(board));
+  if (!res.ok) throw new Error('fetch failed');
+  return res.json();
+}
+async function postScore(entry) {
+  const res = await fetch('/api/scores', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(entry),
+  });
+  if (!res.ok) throw new Error('submit failed');
+  return res.json();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function openLeaderboard(board) {
+  lbBoard = board || difficultyId || 'normal';
+  showMenuScreen('leaderboard');
+  renderLeaderboard();
+}
+
+async function renderLeaderboard() {
+  const list = $('leaderboardList');
+  [...$('lbTabs').children].forEach((b) => b.classList.toggle('selected', b.dataset.board === lbBoard));
+  list.innerHTML = '<div class="lb-empty">Loading…</div>';
+  try {
+    const rows = await fetchLeaderboard(lbBoard);
+    if (!rows.length) {
+      list.innerHTML = '<div class="lb-empty">No scores yet on this tier — be the first pilot on the board!</div>';
+      return;
+    }
+    const mineScore = lastSubmitted && lastSubmitted.board === lbBoard ? lastSubmitted.score : null;
+    let mineMarked = false;
+    list.innerHTML = rows.map((e, i) => {
+      const isMine = !mineMarked && mineScore != null && e.score === mineScore;
+      if (isMine) mineMarked = true;
+      const tag = e.won ? '🏆 ' : '';
+      return '<div class="lb-row ' + (i < 3 ? 'top3 ' : '') + (isMine ? 'lb-me' : '') + '">' +
+        '<div class="lb-rank">' + (i + 1) + '</div>' +
+        '<div class="lb-name">' + tag + escapeHtml(e.name) + '</div>' +
+        '<div class="lb-score">' + Number(e.score).toLocaleString() + '</div>' +
+        '<div class="lb-meta">' + (e.won ? 'cleared L' + e.level : 'L' + e.level) + '</div>' +
+        '</div>';
+    }).join('');
+  } catch (err) {
+    list.innerHTML = '<div class="lb-empty">Couldn\'t reach the leaderboard.<br>Check your connection and try again.</div>';
+  }
+}
+
+$('lbTabs').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-board]');
+  if (!btn) return;
+  lbBoard = btn.dataset.board;
+  renderLeaderboard();
+});
+
+// From game over: reset to a clean menu state, then show the board.
+$('viewLbBtn').addEventListener('click', () => { goToMenu(); openLeaderboard(state.lastDiff || difficultyId); });
+
+// Score submission from the game-over screen.
+async function submitScoreEntry() {
+  const btn = $('saveScoreBtn'), input = $('nameInput');
+  const name = (input.value.trim() || 'PILOT').slice(0, 12);
+  try { localStorage.setItem(LB_KEY_NAME, name); } catch (e) { /* ignore */ }
+  btn.disabled = true; btn.textContent = 'SAVING…';
+  const entry = { board: state.lastDiff, name, score: state.lastScore, level: state.lastLevel, won: state.lastVictory };
+  try {
+    await postScore(entry);
+    lastSubmitted = { board: entry.board, score: entry.score };
+    $('scoreEntry').classList.add('hidden');
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'RETRY';
+    $('scoreEntry').querySelector('.score-entry-label').textContent = '⚠ Couldn\'t submit — check your connection.';
+  }
+}
+$('saveScoreBtn').addEventListener('click', submitScoreEntry);
+$('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitScoreEntry(); });
+
+// On game over, reveal the name-entry row only if the score would actually
+// make the board (top 20) for its tier. Silent no-op if the API is
+// unreachable — the player just doesn't get the prompt, nothing breaks.
+async function offerScoreEntry() {
+  const entry = $('scoreEntry');
+  entry.classList.add('hidden');
+  if (!state.lastScore || state.lastScore <= 0) return;
+  let qualifies = false;
+  try {
+    const rows = await fetchLeaderboard(state.lastDiff);
+    qualifies = rows.length < 20 || state.lastScore > rows[rows.length - 1].score;
+  } catch (e) { return; } // offline / no board yet → no prompt
+  if (!qualifies || state.mode !== 'over') return;
+  const label = entry.querySelector('.score-entry-label');
+  label.textContent = '🏆 That\'s a leaderboard score! Enter your name:';
+  const btn = $('saveScoreBtn'); btn.disabled = false; btn.textContent = 'SAVE';
+  $('nameInput').value = (() => { try { return localStorage.getItem(LB_KEY_NAME) || ''; } catch (e) { return ''; } })();
+  entry.classList.remove('hidden');
+}
 
 $('startBtn').addEventListener('click', () => startGame(state.mapSelect));
 $('retryBtn').addEventListener('click', () => {

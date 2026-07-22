@@ -27,8 +27,30 @@ public/            everything served to visitors
   index.html         menus + HUD markup
   style.css          neon UI styles
   game.js            the whole game (canvas, maps, waves, towers, sound)
-wrangler.jsonc     Cloudflare Worker config (static assets only)
+_worker.js         routes /api/scores, falls through to static files otherwise
+functions/
+  api/scores.js      leaderboard API (D1-backed), reused via _worker.js
+schema.sql         the td_scores leaderboard table
+wrangler.jsonc     Worker config: static assets + D1 binding
 ```
+
+## Leaderboard (D1)
+
+Scores are stored in [Cloudflare D1](https://developers.cloudflare.com/d1/),
+split into a board per difficulty. It reuses the **same `arcade-scores`
+database** as Typing Racer, in its own `td_scores` table — so the two games'
+scores never touch. One-time setup:
+
+1. Cloudflare dashboard → **Workers & Pages → D1** → open **arcade-scores**.
+2. **Console** tab → paste the contents of [`schema.sql`](schema.sql) →
+   **Execute**. That adds the `td_scores` table (the star-typer `scores`
+   table is left alone).
+3. The D1 binding is already in `wrangler.jsonc` (`DB` → `arcade-scores`), so
+   it deploys with the code — no dashboard binding step needed.
+
+Until the table exists the game runs fine; the leaderboard screen just shows
+a "couldn't reach the leaderboard" message and no score prompt appears, so
+this can be done any time after the first deploy.
 
 ## Local preview
 

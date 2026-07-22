@@ -1,7 +1,16 @@
 {
   "name": "star-defense",
+  "main": "_worker.js",
   "compatibility_date": "2026-07-14",
   "assets": {
-    "directory": "./public"
-  }
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arcade-scores",
+      "database_id": "cd2e5af0-7609-412b-b259-6adf01852509"
+    }
+  ]
 }

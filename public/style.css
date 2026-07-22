@@ -294,6 +294,62 @@ canvas {
   color: var(--neon-cyan);
   box-shadow: 0 0 14px rgba(75, 245, 255, 0.3);
 }
+/* ============ LEADERBOARD ============ */
+.leaderboard-list {
+  text-align: left;
+  margin: 8px 0 16px;
+  max-height: 46vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+}
+.lb-row.top3 {
+  background: rgba(255, 231, 75, 0.08);
+  border: 1px solid rgba(255, 231, 75, 0.3);
+}
+.lb-rank { width: 24px; font-weight: 800; color: var(--neon-purple); text-align: center; }
+.lb-name { flex: 1; font-weight: 700; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-score { font-weight: 800; color: var(--neon-cyan); min-width: 68px; text-align: right; }
+.lb-meta { font-size: 0.68rem; color: #8fa8cc; min-width: 64px; text-align: right; }
+.lb-empty { color: #8fa8cc; padding: 22px 0; text-align: center; font-size: 0.88rem; line-height: 1.5; }
+.lb-me { box-shadow: inset 0 0 0 1px var(--neon-cyan); }
+
+/* score entry on game over */
+.score-entry {
+  margin: 4px 0 12px;
+  background: rgba(255, 231, 75, 0.08);
+  border: 1px solid rgba(255, 231, 75, 0.35);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.score-entry.hidden { display: none; }
+.score-entry-label { font-size: 0.82rem; color: var(--neon-yellow); margin-bottom: 9px; font-weight: 700; }
+.score-entry-row { display: flex; gap: 8px; }
+.name-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #eaf6ff;
+  font-size: 1rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-family: inherit;
+  min-width: 0;
+}
+.name-input:focus { outline: none; border-color: var(--neon-cyan); }
+.primary-btn.small-btn { width: auto; padding: 9px 20px; font-size: 0.9rem; }
+
 /* Short screens (landscape phones). The menu panels scroll, so nothing was
    ever unreachable — but the last button sat below the fold, which reads as
    a cut-off layout. Tightening the vertical rhythm fits them outright. */
