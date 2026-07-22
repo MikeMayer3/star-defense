@@ -294,6 +294,64 @@ canvas {
   color: var(--neon-cyan);
   box-shadow: 0 0 14px rgba(75, 245, 255, 0.3);
 }
+/* Short screens (landscape phones). The menu panels scroll, so nothing was
+   ever unreachable — but the last button sat below the fold, which reads as
+   a cut-off layout. Tightening the vertical rhythm fits them outright. */
+@media (max-height: 430px) {
+  .menu-panel { padding: 16px 22px 14px; }
+  .menu-panel.small { padding: 18px 22px; }
+  .title { font-size: 1.5rem; letter-spacing: 2px; margin-bottom: 2px; }
+  .gameover-title, .victory-title { font-size: 1.4rem; }
+  .subtitle { font-size: 0.76rem; margin-bottom: 12px; }
+  .results { margin: 10px 0; padding: 7px 14px; }
+  .result-row { padding: 4px 0; font-size: 0.8rem; }
+  .primary-btn { padding: 9px 18px; font-size: 0.9rem; }
+  .ghost-btn { padding: 6px 14px; font-size: 0.76rem; margin-top: 6px; }
+  .howto { margin-top: 12px; padding-top: 10px; font-size: 0.7rem; }
+  .level-grid { max-height: 108px; }
+  .new-record { margin-bottom: 8px; font-size: 0.9rem; }
+}
+
+/* ============ PORTRAIT NOTICE ============ */
+#rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 60;              /* above every screen, including pause/game-over */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(10,14,40,0.94) 0%, rgba(2,3,15,0.98) 100%);
+  backdrop-filter: blur(3px);
+}
+#rotate.hidden { display: none; }
+.rotate-inner {
+  text-align: center;
+  padding: 28px 26px;
+  max-width: 320px;
+}
+.rotate-icon {
+  font-size: 3rem;
+  animation: rotateHint 2.4s ease-in-out infinite;
+}
+@keyframes rotateHint {
+  0%, 45%, 100% { transform: rotate(0deg); }
+  60%, 85%      { transform: rotate(90deg); }
+}
+.rotate-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--neon-cyan);
+  margin: 14px 0 8px;
+  text-shadow: 0 0 16px rgba(75,245,255,0.5);
+}
+.rotate-sub {
+  font-size: 0.82rem;
+  color: #a9c4e8;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
 /* ============ FIRST-RUN COACH ============ */
 #coach {
   position: fixed;

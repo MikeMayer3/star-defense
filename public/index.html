@@ -157,6 +157,18 @@
 <!-- short description bubble for whichever shop card is currently selected -->
 <div id="towerIntel" class="hidden"></div>
 
+<!-- Portrait notice. The board needs width: in portrait on a phone it shrinks
+     to a sliver stranded in dead space. The installed Android app is locked to
+     landscape by the manifest, but the web build can still be opened upright. -->
+<div id="rotate" class="hidden">
+  <div class="rotate-inner">
+    <div class="rotate-icon">🔄</div>
+    <div class="rotate-title">Rotate your device</div>
+    <div class="rotate-sub">Star Defense plays in landscape — the board needs the width.</div>
+    <button id="rotateAnyway" class="ghost-btn">Play anyway</button>
+  </div>
+</div>
+
 <!-- First-run coach: contextual one-liners that advance as you do the thing.
      Non-blocking by design — you can ignore it and keep playing. -->
 <div id="coach" class="hidden">

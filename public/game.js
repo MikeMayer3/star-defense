@@ -53,7 +53,17 @@ function resize() {
   boardX = leftW + (W - leftW - rightW - cell * COLS) / 2;
   boardY = topH + (H - topH - cell * ROWS) / 2;
 }
-window.addEventListener('resize', () => { resize(); initStars(); updateWavePreview(); });
+// Portrait notice — only on genuinely narrow upright screens, so a tall-ish
+// desktop window doesn't get nagged. Dismissable, because being wrong about
+// someone's setup shouldn't lock them out of the game.
+let rotateDismissed = false;
+function updateRotateNotice() {
+  const el = document.getElementById('rotate');
+  if (!el) return;
+  const portrait = window.innerHeight > window.innerWidth && window.innerWidth < 700;
+  el.classList.toggle('hidden', !portrait || rotateDismissed);
+}
+window.addEventListener('resize', () => { resize(); initStars(); updateWavePreview(); updateRotateNotice(); });
 
 function px(cx) { return boardX + cx * cell; }
 function py(cy) { return boardY + cy * cell; }
@@ -3961,6 +3971,11 @@ resize();
 initStars();
 buildShopCards();
 buildMapCards();
+updateRotateNotice();
+document.getElementById('rotateAnyway').addEventListener('click', () => {
+  rotateDismissed = true;
+  updateRotateNotice();
+});
 requestAnimationFrame(loop);
 
 // Belt-and-suspenders zoom lock — the viewport meta tag and CSS
