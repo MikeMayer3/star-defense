@@ -1850,6 +1850,7 @@ function endGame(victory) {
   $('waveBtn').classList.add('hidden');
   overEl.classList.remove('hidden');
   Coach.stop();
+  Wake.disable(); // run's over — let the results screen sleep normally
   updateWavePreview();
 }
 
@@ -2346,6 +2347,52 @@ function buildArsenalPicker() {
 }
 
 /* ======================================================================
+   SCREEN WAKE LOCK
+   Phones dim and sleep mid-run. Tower defense is especially prone to it:
+   the build phase is untimed, so you can sit reading the wave preview and
+   planning for a minute without touching the screen, and the OS counts
+   that as idle.
+
+   The one non-obvious part: the browser releases a wake lock automatically
+   whenever the page stops being visible — screen off, app backgrounded, tab
+   switched. It does NOT come back on its own, so without re-acquiring on
+   visibilitychange the lock works exactly once and then silently stays off
+   for the rest of the session. `want` tracks whether a run is in progress so
+   the re-acquire knows whether it should bother.
+
+   Requires a secure context, which the live site (HTTPS) and localhost both
+   satisfy. Unsupported or refused (battery saver, permissions policy) is a
+   no-op — the game just behaves as it does today.
+   ====================================================================== */
+const Wake = (() => {
+  const supported = 'wakeLock' in navigator;
+  let lock = null, want = false;
+  async function acquire() {
+    if (!supported || !want || lock || document.visibilityState !== 'visible') return;
+    try {
+      lock = await navigator.wakeLock.request('screen');
+      // fires on OS-level release too, not just our own .release()
+      lock.addEventListener('release', () => { lock = null; });
+    } catch (e) { /* refused — nothing to do but let the screen behave normally */ }
+  }
+  async function drop() {
+    const l = lock;
+    lock = null;
+    if (l) { try { await l.release(); } catch (e) { /* ignore */ } }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') acquire();
+  });
+  return {
+    supported,
+    enable() { want = true; acquire(); },
+    disable() { want = false; drop(); },
+    held: () => !!lock,
+    wanted: () => want,
+  };
+})();
+
+/* ======================================================================
    FIRST-RUN COACH
    The game teaches its enemy rules well already (NEW CONTACT banners, the
    wave-preview intel chips), but nothing ever taught the basic LOOP: buy a
@@ -2474,6 +2521,9 @@ function startGame(mapIdx) {
   closeUpgradePanel();
   resize();
   Sound.startMusic();
+  // held for the whole run, pauses included — a paused board is still
+  // something you're looking at and thinking about
+  Wake.enable();
   updateHUD();
   updateWavePreview();
   showBanner(currentMap().name.toUpperCase(), cp ? 'resuming from checkpoint — wave ' + cp.wave : 'build turrets, then start the wave');
@@ -2486,6 +2536,7 @@ function goToMenu() {
   state.mode = 'menu';
   Sound.stopMusic();
   Coach.stop();
+  Wake.disable();
   showMenuScreen('menu');
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
