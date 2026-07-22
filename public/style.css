@@ -294,6 +294,29 @@ canvas {
   color: var(--neon-cyan);
   box-shadow: 0 0 14px rgba(75, 245, 255, 0.3);
 }
+/* ============ SAVE BACKUP (settings) ============ */
+.save-row { display: flex; gap: 8px; justify-content: center; }
+.save-row .ghost-btn { margin-top: 0; }
+.save-code {
+  width: 100%;
+  margin-top: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #cfe4ff;
+  font-family: 'Courier New', monospace;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  resize: vertical;
+  box-sizing: border-box;
+  word-break: break-all;
+}
+.save-code:focus { outline: none; border-color: var(--neon-cyan); }
+.save-msg { font-size: 0.72rem; min-height: 1em; margin-top: 6px; letter-spacing: 0.3px; }
+.save-msg.ok { color: var(--neon-green); }
+.save-msg.err { color: var(--neon-red); }
+
 /* ============ LEADERBOARD ============ */
 .leaderboard-list {
   text-align: left;

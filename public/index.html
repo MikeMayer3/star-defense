@@ -94,6 +94,15 @@
     <p class="settings-label">Tutorial</p>
     <button id="replayCoachBtn" class="ghost-btn">↻ Show the intro tips again</button>
 
+    <p class="settings-label">Backup &amp; transfer progress</p>
+    <div class="save-row">
+      <button id="exportSaveBtn" class="ghost-btn">⬆ Copy backup code</button>
+      <button id="importSaveBtn" class="ghost-btn">⬇ Restore from code</button>
+    </div>
+    <textarea id="saveCode" class="save-code" rows="2" spellcheck="false"
+      placeholder="Your backup code appears here — or paste one and tap Restore" autocomplete="off"></textarea>
+    <div id="saveMsg" class="save-msg"></div>
+
     <button class="ghost-btn" data-back>◀ Back</button>
   </div>
 </div>

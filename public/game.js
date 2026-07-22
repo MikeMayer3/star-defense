@@ -2145,6 +2145,95 @@ $('replayCoachBtn').addEventListener('click', (ev) => {
 });
 
 /* ======================================================================
+   SAVE BACKUP / TRANSFER
+   All progress lives in localStorage, which a phone can evict under storage
+   pressure or a user can wipe by clearing site data — and losing a 40-level
+   campaign is a genuine gut-punch. This exports the progress-critical keys as
+   one copy-pasteable code so it can be backed up or moved to another device.
+   Import validates before writing and then reloads, so every boot-time read
+   picks the restored values up cleanly.
+   ====================================================================== */
+const SAVE_PREFIX = 'SD1-';
+// The keys worth preserving: campaign progress and high score (the ones that
+// hurt to lose), mid-map checkpoints (added dynamically below), difficulty,
+// audio prefs, saved pilot name, and tutorial-seen so a restore doesn't
+// replay the intro. Deliberately NOT the arsenal testing override.
+const BACKUP_KEYS = [
+  'stardefense_mapProgress', 'stardefense_hiScore', 'stardefense_difficulty',
+  'stardefense_musicTrack', 'stardefense_playerName',
+  'stardefense_sfx', 'stardefense_music', 'stardefense_coachDone',
+];
+
+function collectSaveKeys() {
+  const keys = BACKUP_KEYS.slice();
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('stardefense_cp_')) keys.push(k); // per-level checkpoints
+  }
+  return keys;
+}
+
+function exportSave() {
+  const data = {};
+  for (const k of collectSaveKeys()) {
+    const v = localStorage.getItem(k);
+    if (v != null) data[k] = v;
+  }
+  // encodeURIComponent+unescape keeps a unicode pilot name intact through btoa
+  return SAVE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+}
+
+function importSave(code) {
+  code = String(code).trim();
+  if (!code.startsWith(SAVE_PREFIX)) return { ok: false, msg: '⚠ That isn\'t a Star Defense backup code.' };
+  let data;
+  try {
+    data = JSON.parse(decodeURIComponent(escape(atob(code.slice(SAVE_PREFIX.length)))));
+  } catch (e) {
+    return { ok: false, msg: '⚠ Couldn\'t read that code — it may be incomplete.' };
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, msg: '⚠ That code is empty or malformed.' };
+  const keys = Object.keys(data).filter((k) => k.startsWith('stardefense_') && typeof data[k] === 'string');
+  if (!keys.includes('stardefense_mapProgress') && !keys.includes('stardefense_hiScore')) {
+    return { ok: false, msg: '⚠ No Star Defense progress found in that code.' };
+  }
+  for (const k of keys) {
+    try { localStorage.setItem(k, data[k]); } catch (e) { /* ignore quota */ }
+  }
+  return { ok: true, msg: '✓ Progress restored! Reloading…' };
+}
+
+const saveMsgEl = $('saveMsg');
+function setSaveMsg(text, ok) {
+  saveMsgEl.textContent = text;
+  saveMsgEl.className = 'save-msg ' + (ok ? 'ok' : 'err');
+}
+
+$('exportSaveBtn').addEventListener('click', async () => {
+  const code = exportSave();
+  const ta = $('saveCode');
+  ta.value = code;
+  ta.focus();
+  ta.select();
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(code);
+      copied = true;
+    }
+  } catch (e) { /* fall through to manual copy */ }
+  setSaveMsg(copied ? '✓ Copied — paste it somewhere safe.' : 'Select the code above and copy it (Ctrl/Cmd+C).', true);
+});
+
+$('importSaveBtn').addEventListener('click', () => {
+  const code = $('saveCode').value;
+  if (!code.trim()) { setSaveMsg('Paste a backup code into the box first.', false); return; }
+  const res = importSave(code);
+  setSaveMsg(res.msg, res.ok);
+  if (res.ok) setTimeout(() => location.reload(), 1100);
+});
+
+/* ======================================================================
    PLACEMENT + POINTER INPUT
    ====================================================================== */
 function cellFromEvent(ev) {
