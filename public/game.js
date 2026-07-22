@@ -1012,7 +1012,26 @@ function diff() { return DIFFICULTIES.find((d) => d.id === difficultyId) || DIFF
 
 function levelMult(i) { return i === LEVEL_COUNT - 1 ? 1.8 : 1 + 1.5 * i / (LEVEL_COUNT - 1); }
 function levelStartMoney(i) { return Math.round(200 * levelMult(i) * diff().money) + 20; }
-function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex) * diff().hp; }
+/* A tier's HP multiplier PHASES IN across the opening waves instead of
+   applying in full from wave 1. Applying it flat punished exactly the moment
+   a player can't have a board yet — income hasn't accumulated, towers are
+   un-upgraded — so Normal died at wave 6 of level 1 while the old baseline
+   sailed through wave 12 untouched. The curve is eased (quadratic) so the
+   first several waves stay near baseline and full tier pressure lands by
+   wave 15, leaving the whole back half — including the wave-20 and wave-30
+   bosses — at the difficulty the tiers were actually tuned for.
+
+   Tier pressure also phases in across the first few LEVELS. Level 1 is the
+   tutorial level; carrying the full Normal multiplier there meant a
+   reasonable player died on it, when that same player clears it at baseline.
+   By level 6 the tier applies in full, so the campaign a practised player
+   actually spends their time in is untouched — only the intro is eased. */
+function diffHpAt(w) {
+  const waveT = Math.min(1, Math.max(0, (w - 1) / 14));
+  const levelT = Math.min(1, state.mapIndex / 5);
+  return 1 + (diff().hp - 1) * levelT * waveT * waveT;
+}
+function hpMult(w) { return (1 + 0.28 * (w - 1) + 0.022 * (w - 1) * (w - 1)) * levelMult(state.mapIndex) * diffHpAt(w); }
 function speedMult(w) { return (1 + 0.005 * w) * diff().spd; }
 // Kill rewards scale only with the wave within a level, NOT with the level
 // multiplier. Enemies get tankier and more numerous later (more total reward
