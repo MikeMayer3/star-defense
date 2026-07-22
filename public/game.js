@@ -317,12 +317,31 @@ const Sound = (() => {
     invalid: () => tone(140, 0.12, 'square', 0.08),
     upgrade: () => { tone(520, 0.1, 'sine', 0.12); setTimeout(() => tone(780, 0.14, 'sine', 0.12), 90); },
     sell: () => { tone(880, 0.07, 'square', 0.08); setTimeout(() => tone(660, 0.1, 'square', 0.07), 60); },
+    // --- Ballistic (Act I) ---
     shotBlaster: () => tone(950, 0.06, 'sawtooth', 0.035, -450),
     shotGatling: () => tone(720, 0.03, 'square', 0.018),
     shotFrost: () => tone(1250, 0.09, 'sine', 0.04, -600),
     shotMortar: () => tone(150, 0.16, 'triangle', 0.09, -50),
     shotTesla: () => tone(1500, 0.1, 'sawtooth', 0.04, -1000),
     shotRail: () => tone(240, 0.18, 'sawtooth', 0.09, 500),
+    // --- Directed Energy (Act II): electric, bright, sustained. Kept short
+    // and quiet because beams/arcs fire fast and a full board must not drone.
+    shotSpark: () => tone(1150, 0.05, 'square', 0.028, -380),           // crisp zap
+    shotStatic: () => { tone(240, 0.12, 'sawtooth', 0.026, 30); tone(1650, 0.05, 'sine', 0.013, 380); }, // EM buzz + shimmer
+    shotBeam: () => tone(1500, 0.04, 'sine', 0.015, 240),               // soft beam tick (fires ~4/s)
+    shotPrism: () => { tone(920, 0.09, 'triangle', 0.03); tone(1390, 0.07, 'sine', 0.018, 120); }, // crystalline refract
+    // --- Gravitics (Act III): deep, heavy, whooshy mass ---
+    shotDriver: () => tone(175, 0.08, 'square', 0.05, -55),             // heavy slug thunk
+    shotWell: () => { tone(85, 0.18, 'sine', 0.045, 44); tone(150, 0.13, 'triangle', 0.018, -30); }, // gravity wub (aura)
+    shotFlak: () => tone(300, 0.05, 'sawtooth', 0.028, -150),           // gritty scatter
+    shotGraviton: () => tone(120, 0.2, 'triangle', 0.075, -60),         // deep collapsing lob
+    shotMeteor: () => tone(130, 0.24, 'sawtooth', 0.085, 160),          // heavy charged launch
+    // --- Void Xenotech (Act IV): weird, alien, digital ---
+    shotSplinter: () => tone(1650, 0.05, 'square', 0.022, -520),        // glassy shard
+    shotHive: () => tone(540, 0.045, 'sawtooth', 0.018, 90),            // drone buzz (fires fast)
+    shotObelisk: () => { tone(650, 0.14, 'sine', 0.036, 110); tone(975, 0.1, 'sine', 0.018, 60); }, // resonant mark
+    shotRift: () => { tone(78, 0.22, 'sawtooth', 0.048, -18); tone(300, 0.12, 'sine', 0.018, -60); }, // void tear
+    shotAnnihilator: () => { tone(220, 0.09, 'sawtooth', 0.09, 700); setTimeout(() => tone(110, 0.34, 'triangle', 0.14, -85), 80); }, // charge whine → boom
     explosion: () => tone(130, 0.2, 'triangle', 0.11, -70),
     bigExplosion: () => { tone(90, 0.4, 'triangle', 0.16, -50); tone(200, 0.25, 'sawtooth', 0.08, -120); },
     leak: () => tone(180, 0.3, 'square', 0.13, -120),
@@ -1475,14 +1494,14 @@ function fireTower(t, st, target) {
       // packed chaff that cascades; against a lone tank it's just a bolt.
       bolts.push({ x: t.x, y: t.y, target, speed: 12, dmg: st.dmg, color: ty.color, r: 0.09,
                    frag: st.dmg * st.fragFrac });
-      Sound.shotBlaster();
+      Sound.shotSplinter();
       break;
     case 'hive':
       // Drones hunt on their own, so they need no targeting lock and will
       // chase a cloaked ship (see seesCloaked). Many small hits also strip
       // Warden shield charges quickly.
       bolts.push({ x: t.x, y: t.y, target, speed: 7.5, dmg: st.dmg, color: ty.color, r: 0.07, drone: true });
-      Sound.shotGatling();
+      Sound.shotHive();
       break;
     case 'obelisk': {
       // Its own gun is deliberately weak — the payload is the mark, which
@@ -1495,7 +1514,7 @@ function fireTower(t, st, target) {
         target.markBurst = st.dmg * st.burstFrac * 4;
       }
       fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: target.x, y2: target.y, life: 0.12, color: ty.color });
-      Sound.shotTesla();
+      Sound.shotObelisk();
       break;
     }
     case 'rift': {
@@ -1505,7 +1524,7 @@ function fireTower(t, st, target) {
       const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * 0.35);
       zones.push({ x: lead.x, y: lead.y, r: st.riftRadius, dps: st.dmg, ramp: st.riftRamp,
                    life: st.riftDur, maxLife: st.riftDur, color: ty.color, tick: 0 });
-      Sound.shotMortar();
+      Sound.shotRift();
       break;
     }
     case 'annihilator': {
@@ -1523,7 +1542,7 @@ function fireTower(t, st, target) {
         if (Math.abs(px_ * uy - py_ * ux) < 0.45 + e.def.radius) damageEnemy(e, st.dmg, ty.color);
       }
       fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: ex, y2: ey, life: 0.26, color: ty.color });
-      Sound.bigExplosion();
+      Sound.shotAnnihilator();
       break;
     }
     /* ---------- Directed Energy ---------- */
@@ -1534,7 +1553,7 @@ function fireTower(t, st, target) {
       const charged = t.shots % 5 === 0;
       bolts.push({ x: t.x, y: t.y, target, speed: 12, dmg: st.dmg, color: ty.color, r: 0.09,
                    arc: charged ? st.dmg * st.arcFrac : 0 });
-      Sound.shotBlaster();
+      Sound.shotSpark();
       break;
     }
     case 'staticfield': {
@@ -1552,7 +1571,7 @@ function fireTower(t, st, target) {
         }
       }
       fx.push({ kind: 'ring', x: t.x, y: t.y, life: 0.3, maxLife: 0.3, r: st.range, color: ty.color });
-      Sound.shotFrost();
+      Sound.shotStatic();
       break;
     }
     case 'beamlance': {
@@ -1563,7 +1582,7 @@ function fireTower(t, st, target) {
       const ramped = st.dmg * (1 + st.ramp * Math.min(t.beamTime || 0, st.rampCap));
       damageEnemy(target, ramped, ty.color);
       fx.push({ kind: 'beam', x1: t.x, y1: t.y, x2: target.x, y2: target.y, life: 0.1, color: ty.color });
-      Sound.shotRail();
+      Sound.shotBeam();
       break;
     }
     case 'prism': {
@@ -1585,7 +1604,7 @@ function fireTower(t, st, target) {
         damageEnemy(next, st.dmg * st.splitFrac, ty.color);
         fx.push({ kind: 'beam', x1: target.x, y1: target.y, x2: next.x, y2: next.y, life: 0.14, color: ty.color });
       }
-      Sound.shotRail();
+      Sound.shotPrism();
       break;
     }
     /* ---------- Gravitics ---------- */
@@ -1593,7 +1612,7 @@ function fireTower(t, st, target) {
       // like a blaster bolt, but the slug carries momentum: on impact it
       // shoves the ship back down its lane (see bolt handling for b.push)
       bolts.push({ x: t.x, y: t.y, target, speed: 10, dmg: st.dmg, color: ty.color, r: 0.1, push: st.push });
-      Sound.shotBlaster();
+      Sound.shotDriver();
       break;
     case 'singularity': {
       // Aura pulse, like frost: everything in range (cloaked included) is
@@ -1647,7 +1666,7 @@ function fireTower(t, st, target) {
         shoveEnemy(e, Math.max(-st.pull, Math.min(st.pull, bestS - e.s)));
       }
       fx.push({ kind: 'ring', x: t.x, y: t.y, life: 0.3, maxLife: 0.3, r: st.range, color: ty.color });
-      Sound.shotFrost();
+      Sound.shotWell();
       break;
     }
     case 'flak': {
@@ -1666,7 +1685,7 @@ function fireTower(t, st, target) {
         if (Math.abs(da) <= half) damageEnemy(e, st.dmg, ty.color);
       }
       fx.push({ kind: 'cone', x: t.x, y: t.y, a: aim, half, r: st.range, life: 0.12, maxLife: 0.12, color: ty.color });
-      Sound.shotGatling();
+      Sound.shotFlak();
       break;
     }
     case 'graviton': {
@@ -1675,7 +1694,7 @@ function fireTower(t, st, target) {
       const flight = 0.5;
       const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * flight);
       shells.push({ sx: t.x, sy: t.y, tx: lead.x, ty: lead.y, t: 0, dur: flight, dmg: st.dmg, splash: st.splash, color: ty.color, pin: st.pinDur });
-      Sound.shotMortar();
+      Sound.shotGraviton();
       break;
     }
     case 'meteor': {
@@ -1684,7 +1703,7 @@ function fireTower(t, st, target) {
       const flight = 0.65;
       const lead = pathPoint(enemyPath(currentMap(), target.path), target.s + target.speed * effSlow(target) * flight);
       shells.push({ sx: t.x, sy: t.y, tx: lead.x, ty: lead.y, t: 0, dur: flight, dmg: st.dmg, splash: st.splashSm, color: ty.color, meteor: true });
-      Sound.shotMortar();
+      Sound.shotMeteor();
       break;
     }
     case 'rail': {
