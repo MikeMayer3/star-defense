@@ -76,6 +76,9 @@
       <button class="tab-btn" data-track="nova">Nova</button>
     </div>
 
+    <p class="settings-label">Tutorial</p>
+    <button id="replayCoachBtn" class="ghost-btn">↻ Show the intro tips again</button>
+
     <button class="ghost-btn" data-back>◀ Back</button>
   </div>
 </div>
@@ -153,6 +156,13 @@
 
 <!-- short description bubble for whichever shop card is currently selected -->
 <div id="towerIntel" class="hidden"></div>
+
+<!-- First-run coach: contextual one-liners that advance as you do the thing.
+     Non-blocking by design — you can ignore it and keep playing. -->
+<div id="coach" class="hidden">
+  <div class="coach-text" id="coachText"></div>
+  <button class="coach-skip" id="coachSkip">Skip</button>
+</div>
 
 <div id="banner" class="banner hidden"></div>
 

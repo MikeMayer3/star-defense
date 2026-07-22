@@ -1740,6 +1740,7 @@ function startWave() {
   else showBanner('WAVE ' + state.level, currentMap().name.toUpperCase());
   updateWavePreview();
   updateHUD();
+  Coach.notify('waveStart');
 }
 
 function waveComplete() {
@@ -1817,6 +1818,7 @@ function endGame(victory) {
   shopEl.classList.add('hidden');
   $('waveBtn').classList.add('hidden');
   overEl.classList.remove('hidden');
+  Coach.stop();
   updateWavePreview();
 }
 
@@ -2008,7 +2010,7 @@ function setPlacing(i) {
   // dataset.index (the tower's true TOWER_TYPES index), not DOM child
   // position — those diverge as soon as any card is skipped (hidden)
   [...towerCardsEl.children].forEach((c) => c.classList.toggle('selected', Number(c.dataset.index) === i));
-  if (i == null) hideTowerIntel(); else showTowerIntel(i);
+  if (i == null) hideTowerIntel(); else { showTowerIntel(i); Coach.notify('armed'); }
 }
 
 const towerIntelEl = $('towerIntel');
@@ -2059,6 +2061,7 @@ function openUpgradePanel(t) {
   $('sellBtn').textContent = '💰 SELL $' + sellValue(t);
   towerCardsEl.style.display = 'none';
   upPanelEl.classList.remove('hidden');
+  Coach.notify('upgradePanel');
 }
 
 function closeUpgradePanel() {
@@ -2096,6 +2099,11 @@ $('sellBtn').addEventListener('click', () => {
 });
 
 $('closeUpBtn').addEventListener('click', closeUpgradePanel);
+$('coachSkip').addEventListener('click', () => Coach.skip());
+$('replayCoachBtn').addEventListener('click', (ev) => {
+  Coach.reset();
+  ev.target.textContent = '✓ Tips will show on your next game';
+});
 
 /* ======================================================================
    PLACEMENT + POINTER INPUT
@@ -2130,6 +2138,7 @@ function placeTowerAt(typeIndex, col, row) {
   Sound.place();
   burst(t.x, t.y, ty.color, 10);
   updateHUD();
+  Coach.notify('placed');
   return true;
 }
 
@@ -2298,6 +2307,86 @@ function buildArsenalPicker() {
   }
 }
 
+/* ======================================================================
+   FIRST-RUN COACH
+   The game teaches its enemy rules well already (NEW CONTACT banners, the
+   wave-preview intel chips), but nothing ever taught the basic LOOP: buy a
+   turret, place it, start the wave, then spend what you earned on upgrades.
+   A new player used to land in a shop of six unexplained turrets with no
+   prompt at all.
+
+   Deliberately not a modal takeover: each step is a one-line prompt that
+   appears at the moment it's relevant, pulses the control it's talking
+   about, and advances when you actually do the thing. Purely informational
+   steps time out on their own so the coach can never wedge a run. It only
+   runs once, and only on a player's very first game.
+   ====================================================================== */
+const Coach = (() => {
+  const KEY = 'stardefense_coachDone';
+  const el = () => document.getElementById('coach');
+  const textEl = () => document.getElementById('coachText');
+  // `on` = the notify() event that completes the step; `after` = seconds to
+  // auto-advance an informational step that has no natural trigger.
+  const STEPS = [
+    { on: 'armed', highlight: 'shop',
+      html: 'Tap a turret in the shop to select it. <b>Cheap ones first</b> — you can upgrade later.' },
+    { on: 'placed',
+      html: 'Now tap a highlighted tile beside the lane to <b>build it</b>.' },
+    { on: 'waveStart', highlight: 'waveBtn',
+      html: 'Build a couple more, then hit <b>START WAVE</b> when you\'re ready.' },
+    { after: 7,
+      html: 'Every ship you destroy pays out <b>Space Bucks</b>. Spend them between waves.' },
+    { on: 'upgradePanel', after: 18, highlight: 'shop',
+      html: 'Tap a turret you\'ve already built to <b>upgrade</b> it — a few strong turrets beat a crowd of weak ones.' },
+    { after: 9,
+      html: 'Watch the wave preview up top — <b>tap an enemy icon</b> to see what it does and how to counter it.' },
+  ];
+  let idx = -1, timer = null, active = false;
+
+  function clearHighlight() {
+    document.querySelectorAll('.coach-target').forEach((n) => n.classList.remove('coach-target'));
+  }
+  function hide() {
+    clearTimeout(timer); timer = null;
+    clearHighlight();
+    const e = el(); if (e) e.classList.add('hidden');
+  }
+  function finish() {
+    active = false; idx = -1;
+    hide();
+    try { localStorage.setItem(KEY, '1'); } catch (err) { /* ignore */ }
+  }
+  function show(i) {
+    idx = i;
+    if (i >= STEPS.length) { finish(); return; }
+    const step = STEPS[i], e = el();
+    if (!e) return;
+    clearHighlight();
+    textEl().innerHTML = step.html;
+    e.classList.remove('hidden');
+    // restart the entry animation so each step reads as a new prompt
+    e.style.animation = 'none'; void e.offsetWidth; e.style.animation = '';
+    if (step.highlight) {
+      const target = document.getElementById(step.highlight);
+      if (target) target.classList.add('coach-target');
+    }
+    clearTimeout(timer); timer = null;
+    if (step.after) timer = setTimeout(() => { if (active && idx === i) show(i + 1); }, step.after * 1000);
+  }
+  return {
+    isDone: () => { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return true; } },
+    reset() { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } },
+    start() { if (this.isDone()) return; active = true; show(0); },
+    stop() { active = false; hide(); },
+    skip: finish,
+    // called from the gameplay code at the moments a step can complete
+    notify(evt) {
+      if (!active || idx < 0 || idx >= STEPS.length) return;
+      if (STEPS[idx].on === evt) show(idx + 1);
+    },
+  };
+})();
+
 function startGame(mapIdx) {
   state.mapIndex = mapIdx;
   state.mapSelect = mapIdx;
@@ -2350,11 +2439,15 @@ function startGame(mapIdx) {
   updateHUD();
   updateWavePreview();
   showBanner(currentMap().name.toUpperCase(), cp ? 'resuming from checkpoint — wave ' + cp.wave : 'build turrets, then start the wave');
+  // first-ever game: walk the player through the core loop. Delayed so it
+  // doesn't collide with the level's opening banner.
+  if (!Coach.isDone()) setTimeout(() => { if (state.mode === 'playing') Coach.start(); }, 1800);
 }
 
 function goToMenu() {
   state.mode = 'menu';
   Sound.stopMusic();
+  Coach.stop();
   showMenuScreen('menu');
   overEl.classList.add('hidden');
   pauseEl.classList.add('hidden');
