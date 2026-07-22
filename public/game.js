@@ -1332,9 +1332,16 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     }
     // Brute cracks apart into a pack of weak Splinters right where it died —
     // the clumped low-HP burst is exactly what splash damage should punish.
+    // Count ramps with the wave: an early board can't yet field enough AoE,
+    // and Brutes come in packs, so a flat 10 flooded the intro (5-7 Brutes ×
+    // 10 = 50-70 splinters at wave 5 wiped under-built boards in one wave).
+    // Scaling keeps the burst proportional to how established the board
+    // should be, reaching the full flood by the late game where it's the
+    // intended anti-splash check.
     if (e.type === 'brute') {
-      for (let k = 0; k < 10; k++) {
-        spawnEnemy('splinter', e.path, Math.max(0, e.s + (k - 4.5) * 0.09));
+      const shards = Math.min(10, 3 + Math.floor(state.level / 3));
+      for (let k = 0; k < shards; k++) {
+        spawnEnemy('splinter', e.path, Math.max(0, e.s + (k - (shards - 1) / 2) * 0.09));
       }
     }
     // Super Dreadnought's death spawns two full-strength Dreadnoughts —
