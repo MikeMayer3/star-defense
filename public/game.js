@@ -1363,7 +1363,6 @@ function damageEnemy(e, dmg, color, fromFrost = false) {
     e.dead = true;
     state.money += e.reward;
     state.earned += e.reward;
-    state.score += e.reward * 10;
     state.kills++;
     achOnKill(e.type);
     addFloat(e.x, e.y, '+$' + e.reward, '#ffe74b');
@@ -1798,7 +1797,6 @@ function waveComplete() {
   const bonus = 50 + state.level * 8;
   state.money += bonus;
   state.earned += bonus;
-  state.score += bonus * 5;
   Sound.waveClear();
   addFloat(COLS / 2, ROWS / 2, 'WAVE BONUS +$' + bonus, '#5dffb0');
 
@@ -1823,11 +1821,67 @@ function waveComplete() {
   updateHUD();
 }
 
+// The realistic build zone: buildable tiles adjacent (8-way) to the lane.
+// NOT every empty cell — most of the board sits far from the lane and never
+// gets a tower, so counting it would make any board look "lean" and flatten
+// the efficiency score. This adjacent ring is where towers actually go (a
+// filled board is ~this many), so it's the right denominator for "how much
+// of the map did you use" and reads sensibly as "Turrets Used: 22 / 58".
+function buildableTileCount() {
+  const lane = currentMap().cells;
+  let n = 0;
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (lane.has(c + ',' + r)) continue;
+      let touchesLane = false;
+      for (let dc = -1; dc <= 1 && !touchesLane; dc++) {
+        for (let dr = -1; dr <= 1; dr++) {
+          if (dc === 0 && dr === 0) continue;
+          if (lane.has((c + dc) + ',' + (r + dr))) { touchesLane = true; break; }
+        }
+      }
+      if (touchesLane) n++;
+    }
+  }
+  return n;
+}
+
+/* Leaderboard scoring. Computed from the OUTCOME at run end, not accumulated
+   from kills, so it ranks the things that actually show skill:
+   · LEVEL is the dominant term (superlinear) — a level-40 run beats a level-1
+     run no matter how cleanly the level-1 run went, which is the whole point
+     now that there's a leaderboard.
+   · How far you got in the level (a full clear = max; dying scales down).
+   · Shields kept — rewards a clean hold, but capped so it can never outweigh
+     reaching a higher level.
+   · Turret efficiency — fewer turrets (relative to the tiles a map offers)
+     scores higher, so a lean board beats spamming every tile.
+   · Difficulty multiplier — a Veteran hold is worth far more than the same
+     level on Beginner (also what makes the cross-difficulty personal best
+     honour the harder tiers).
+   Deliberately NO time factor. */
+const DIFF_SCORE_MULT = { beginner: 0.6, normal: 1.0, veteran: 1.6 };
+function computeRunScore(victory) {
+  const level = state.mapIndex + 1;                 // 1..40
+  const wavesDone = victory ? TOTAL_WAVES : Math.max(0, state.level - 1);
+  const progress = victory ? 1 : wavesDone / TOTAL_WAVES;
+  const shieldMult = 1 + state.lives * 0.03;        // up to +75% at 25 shields
+  const tiles = buildableTileCount();
+  const peak = Math.max(1, state.peakTowers || towers.length);
+  const usedFrac = tiles > 0 ? Math.min(1, peak / tiles) : 1;
+  const effMult = 1 + (1 - usedFrac) * 0.6;         // lean board → up to +60%
+  const diffMult = DIFF_SCORE_MULT[difficultyId] || 1;
+  const levelValue = Math.pow(level, 1.7) * 1000;   // the dominant term
+  return Math.round(levelValue * progress * shieldMult * effMult * diffMult);
+}
+
 function endGame(victory) {
   state.mode = 'over';
   state.phase = 'build';
   Sound.stopMusic();
   if (victory) Sound.victory(); else Sound.gameOver();
+
+  state.score = computeRunScore(victory); // outcome-based, replaces the tally
 
   if (victory) {
     const prog = progFor(state.mapIndex);
@@ -1845,6 +1899,7 @@ function endGame(victory) {
   $('finalWave').textContent = (victory ? TOTAL_WAVES : state.level) + ' / ' + TOTAL_WAVES;
   $('finalScore').textContent = state.score.toLocaleString();
   $('finalKills').textContent = state.kills.toLocaleString();
+  $('finalTowers').textContent = (state.peakTowers || towers.length) + ' / ' + buildableTileCount();
   $('finalEarned').textContent = '$' + state.earned.toLocaleString();
 
   let record = false;
@@ -2290,6 +2345,7 @@ function placeTowerAt(typeIndex, col, row) {
   updateHUD();
   Coach.notify('placed');
   if (state.builtTypes) { state.builtTypes.add(typeIndex); achOnPlace(); }
+  state.peakTowers = Math.max(state.peakTowers || 0, towers.length);
   return true;
 }
 
@@ -2732,6 +2788,9 @@ function startGame(mapIdx) {
       grid[s.col + ',' + s.row] = t;
     }
   }
+  // most turrets held at once this run (scoring efficiency) — set after any
+  // checkpoint rebuild so a resumed defense counts from the start
+  state.peakTowers = towers.length;
   enemies = []; bolts = []; shells = []; zones = []; fx = []; parts = []; floats = [];
   spawnQueue = [];
 

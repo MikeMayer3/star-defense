@@ -439,10 +439,10 @@ canvas {
   .title { font-size: 1.5rem; letter-spacing: 2px; margin-bottom: 2px; }
   .gameover-title, .victory-title { font-size: 1.4rem; }
   .subtitle { font-size: 0.76rem; margin-bottom: 12px; }
-  .results { margin: 10px 0; padding: 7px 14px; }
-  .result-row { padding: 4px 0; font-size: 0.8rem; }
-  .primary-btn { padding: 9px 18px; font-size: 0.9rem; }
-  .ghost-btn { padding: 6px 14px; font-size: 0.76rem; margin-top: 6px; }
+  .results { margin: 8px 0; padding: 6px 14px; }
+  .result-row { padding: 3px 0; font-size: 0.78rem; }
+  .primary-btn { padding: 8px 18px; font-size: 0.88rem; }
+  .ghost-btn { padding: 5px 14px; font-size: 0.75rem; margin-top: 4px; }
   .howto { margin-top: 12px; padding-top: 10px; font-size: 0.7rem; }
   .level-grid { max-height: 108px; }
   .new-record { margin-bottom: 8px; font-size: 0.9rem; }
